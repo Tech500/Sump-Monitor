@@ -1,15 +1,15 @@
 //
 //   "Sump_Sender.ino" and  
 //   variableInput.h library
-//   William M. Lucid   10/06/2019   @ 15:02 EDT    
+//   William M. Lucid   04/09/2026 @ 21:56 EDT    
 // 
 
 // Replace with your network details  
-//const char * host  = "esp32";
+//const char * host  = "Sump-Monitor";
 
 // Replace with your network details
-const char * ssid = "R2D2";
-const char * password = "Sky7388500";
+const char * ssid = "yourSSID";
+const char * password = "yourPASSWURD";
 
 //Settings pertain to NTP
 const int udpPort = 1337;
@@ -19,13 +19,13 @@ const char * udpAddress2 = "time.nist.gov";
 
 //publicIP accessiable over Internet with Port Forwarding; know the risks!!!
 //WAN IP Address.  Or use LAN IP Address --same as server ip; no Internet access. 
-#define publicIP "https://sump-monitor.tailb986d2.ts.net/"  //Part of href link for "GET" requests
+#define publicIP "https://TailscaleURL/"  //Part of href link for "GET" requests
 
 //Find your public ipAddress:  https://whatismyipaddress.com/
 
 String LISTEN_PORT = "80"; //Part of href link for "GET" requests
 
-String linkAddress = "sump-monitor.tailb986d2.ts.net:80";  //publicIP and PORT for URL link
+String linkAddress = "stailscaleURL:80";  //publicIP and PORT for URL link
 
 String ip1String = "hostipaddress";  //Host ip address  
 
@@ -35,9 +35,10 @@ int PORT = 80;  //Web Server port
 //Enter "ThingSpeak.com" data here....
 //Example data; enter yout account data..
 unsigned long int myChannelNumber = 123456; 
-const char * myWriteAPIKey = "EE2345";
+const char * myWriteAPIKey = "YY2345";
 
 //Server settings --all internal LAN addresses
+//Static IP --assign Router ip reservation address!
 #define ip {192,168,12,22}
 #define subnet {255,255,255,0}
 #define gateway {192,168,12,1}
