@@ -180,7 +180,7 @@ This project is licensed under the [MIT License](LICENSE).
 
 ## Author
 
-**William Lucid (Tech500)**  
+**William Lucid (Tech500), AB9NQ**  
 [GitHub Profile](https://github.com/Tech500)
 
 ---
