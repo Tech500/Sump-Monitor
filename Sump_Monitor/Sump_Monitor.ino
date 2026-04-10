@@ -17,8 +17,8 @@
 //                       Project is Open-Source; requires ESP8266 based developement board.
 //
 //
-//
-//                      Note:  Uses ESP32-S3 by Espressif Community version 3.3.7 for "Arduino IDE Nightbuild 2.3.8."
+//                        Collabitive work with Tech500, Claude, and Copilot.
+//                        Note:  Uses ESP32-S3 by Espressif Community version 3.3.7 for "Arduino IDE Nightbuild 2.3.8."
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -74,7 +74,7 @@ uint16_t reconnect_interval = 10000;
 
 EMailSender emailSend("ab9nq.william@gmail.com", "jxvd vfoc amdb fabf");  //gmail email address and gmail application password
 
-//How to create application password  https://www.lifewire.com/get-a-password-to-access-gmail-by-pop-imap-2-1171882
+//How to create application password  "https://lifewire.com/get-a-password-to-access-gmail-by-pop-imap-2-1171882"
 
 uint8_t WiFiConnect(const char *nSSID = nullptr, const char *nPassword = nullptr) {
   static uint16_t attempt = 0;
