@@ -4,17 +4,17 @@
 //
 //    Version 1.0        Adding  HTTP over TLS (HTTPS)     09/05/2020 @ 13:48 EDT
 //
-//                       ESP8266 --Internet Sump Pit Monitor, Datalogger and Dynamic Web Server   05/16/2020 @ 12:45 EDT
+//                       ESP32S3 --Internet Sump Pit Monitor, Datalogger and Dynamic Web Server   05/16/2020 @ 12:45 EDT
 //
 //                       NTP time routines optimized for speed by schufti  --of ESP8266.com
 //
-//                       Project uses ESP8266 Developement board: NodeMCU
+//                       Project uses ESP32S3 Developement board: 
 //
 //                       readFiles and readFile functions by martinayotte of ESP8266 Community Forum
 //
 //                       Previous projects:  by tech500" on https://github.com/tech500
 //
-//                       Project is Open-Source; requires ESP8266 based developement board.
+//                       Project is Open-Source; requires ESP32S3 based developement board.
 //
 //
 //                        Collabitive work with Tech500, Claude, and Copilot.
