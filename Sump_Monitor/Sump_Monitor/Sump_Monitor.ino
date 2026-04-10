@@ -72,7 +72,7 @@
 uint8_t connection_state = 0;
 uint16_t reconnect_interval = 10000;
 
-EMailSender emailSend("ab9nq.william@gmail.com", "jxvd vfoc amdb fabf");  //gmail email address and gmail application password
+EMailSender emailSend("gmail-address@gmail.com", "jxvd vfoc amdb fabf");  //gmail email address and gmail application password
 
 //How to create application password  https://www.lifewire.com/get-a-password-to-access-gmail-by-pop-imap-2-1171882
 
@@ -869,8 +869,8 @@ void sendAlert() {
                     "/// Alert number: "
                     + String(alertCount) + " /// " + dtStamp;
 
-  EMailSender::Response resp = emailSend.send("3173405675@tmomail.net", message);
-  emailSend.send("ab9nq.william@gmail.com", message);
+  EMailSender::Response resp = emailSend.send("10 digit-cell-number5@tmomail.net", message);
+  emailSend.send("gmail-address@gmail.com", message);
 
   Serial.println("Alert #" + String(alertCount) + " sent: " + dtStamp);
   Serial.println(resp.status);
