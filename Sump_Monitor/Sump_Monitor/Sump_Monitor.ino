@@ -1,8 +1,10 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
-//    Version 2.0        Alert cooldown, counter, All Clear, boot fix    04/09/2026
+//    Version 5.0        Added Alexa (SinricPro, DimmerSwitch applied to sump-Monitor) with stop command for alert 04/12/2026 @ 23:54 EDT
 //
-//    Version 1.0        Adding  HTTP over TLS (HTTPS)     09/05/2020 @ 13:48 EDT
+//                       Alert cooldown, counter, All Clear, boot fix    04/09/2026
+//
+//                       Adding  HTTP over TLS (HTTPS)     09/05/2020 @ 13:48 EDT
 //
 //                       ESP8266 --Internet Sump Pit Monitor, Datalogger and Dynamic Web Server   05/16/2020 @ 12:45 EDT
 //
@@ -50,79 +52,103 @@
 //
 // *********************************************************************************
 // *********************************************************************************
+
+#include <WebServer.h>
+
+#define WEBSERVER_H
+
+#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1
+
 #include "Arduino.h"
 #include <EMailSender.h>  //https://github.com/xreef/EMailSender
 #include <WiFi.h>         //Part of ESP8266 Board Manager install __> Used by WiFi to connect to network
 #include <WiFiUdp.h>
+#include <WebSocketsClient.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>  //https://github.com/me-no-dev/ESPAsyncWebServer
+#include <WebServer.h>          // needed by tzapu WiFiManager
+#include <WiFiManager.h>        // https://github.com/tzapu/WiFiManager
+#include <ElegantOTA.h>
 #include <WiFiClientSecure.h>
 #include <SD.h>
 #include <FS.h>
 #include <LittleFS.h>
-#include <FtpServer.h>   //https://github.com/nailbuster/esp8266FTPServer  -->Needed for ftp transfers
-#include <HTTPClient.h>  //Part of ESP8266 Board Manager install --> Used for Domain web interface
+#include <FTPServer.h>
+#define BAUDRATE 74880
+#include <HTTPClient.h>  //Part of ESP32 Board Manager install --> Used for Domain web interface
 #include <sys/time.h>    // struct timeval --> Needed to sync time
 #include <time.h>        // time() ctime() --> Needed to sync time
-#include <Ticker.h>      //Part of version 1.0.3 ESP32 Board Manager install  -----> Used for watchdog ISR
+#include <Ticker.h>      //Part of ESP32 Board Manager install  -----> Used for watchdog ISR
 #include <Wire.h>        //Part of the Arduino IDE software download --> Used for I2C Protocol
-//#include <LiquidCrystal_I2C.h>   //https://github.com/esp8266/Basic/tree/master/libraries/LiquidCrystal --> Used for LCD Display
+#include <SinricPro.h>
+#include "SinricProDimSwitch.h"
+#include <SinricProWebsocket.h>
 #include "variableInput.h"  //Packaged with project download.  Provides editing options; without having to search 2000+ lines of code.
+
+WiFiManager wm;  // global WiFiManager instance -- do NOT move into a function
+
+// Reset button pin -- wire a momentary pushbutton between this pin and GND.
+// Hold for 3 seconds at boot to wipe saved credentials and reopen the
+// setup portal.  GPIO 0 is shown here as an example; change to any free
+// pin that does not conflict with trigPin, echoPin, SDA, SCL, or the
+// online LED pin.
+#define WIFI_RESET_PIN 0
 
 uint8_t connection_state = 0;
 uint16_t reconnect_interval = 10000;
 
-EMailSender emailSend("gmail-address@gmail.com", "jxvd vfoc amdb fabf");  //gmail email address and gmail application password
+// struct stores both states cleanly
+struct {
+  bool powerState = false;
+  int powerLevel = 0;
+} device_state;
 
-//How to create application password  https://www.lifewire.com/get-a-password-to-access-gmail-by-pop-imap-2-1171882
+bool onPowerState(const String &deviceId, bool &state) {
+  Serial.printf("Device %s power turned %s \r\n", deviceId.c_str(), state?"on":"off");
+  device_state.powerState = state;
+  return true; // request handled properly
+}
 
-uint8_t WiFiConnect(const char *nSSID = nullptr, const char *nPassword = nullptr) {
-  static uint16_t attempt = 0;
-  Serial.print("Connecting to ");
-  if (nSSID) {
-    WiFi.begin(nSSID, nPassword);
-    Serial.println(nSSID);
-  }
-
-  uint8_t i = 0;
-  while (WiFi.status() != WL_CONNECTED && i++ < 50) {
-    delay(200);
-    Serial.print(".");
-  }
-  ++attempt;
-  Serial.println("");
-  if (i == 51) {
-    Serial.print("Connection: TIMEOUT on attempt: ");
-    Serial.println(attempt);
-    if (attempt % 2 == 0)
-      Serial.println("Check if access point available or SSID and Password\r\n");
-    return false;
-  }
-  Serial.println("Connection: ESTABLISHED");
-  Serial.print("Got IP address: ");
-  Serial.println(WiFi.localIP());
-  Serial.print("Port:  ");
-  Serial.print(LISTEN_PORT);
-  Serial.println("\n");
+bool onPowerLevel(const String &deviceId, int &powerLevel) {
+  device_state.powerLevel = powerLevel;
+  Serial.printf("Device %s power level changed to %d\r\n", deviceId.c_str(), device_state.powerLevel);
   return true;
 }
 
-WiFiClientSecure client;
-
-void Awaits() {
-  uint32_t ts = millis();
-  while (!connection_state) {
-    delay(50);
-    if (millis() > (ts + reconnect_interval) && !connection_state) {
-      connection_state = WiFiConnect();
-      ts = millis();
-    }
-  }
+bool onAdjustPowerLevel(const String &deviceId, int &levelDelta) {
+  device_state.powerLevel += levelDelta;
+  Serial.printf("Device %s power level changed about %i to %d\r\n", deviceId.c_str(), levelDelta, device_state.powerLevel);
+  levelDelta = device_state.powerLevel;
+  return true;
 }
+
+void setupSinricPro() {
+  SinricProDimSwitch &myDimSwitch = SinricPro[DIMSWITCH_ID];
+  myDimSwitch.onPowerState(onPowerState);
+  myDimSwitch.onPowerLevel(onPowerLevel);
+  myDimSwitch.onAdjustPowerLevel(onAdjustPowerLevel);
+  SinricPro.onConnected([](){
+    Serial.printf("Connected to SinricPro\r\n");
+  });
+  SinricPro.onDisconnected([](){
+    Serial.printf("Disconnected from SinricPro\r\n");
+  });
+  SinricPro.begin(APP_KEY, APP_SECRET);
+}
+
+EMailSender emailSend(SENDER_EMAIL, SENDER_PASS);  //gmail email address and gmail application password  <---edit variableInput.h
+
+#define nosensor 0.00
+
+//How to create application password  https://www.lifewire.com/get-a-password-to-access-gmail-by-pop-imap-2-1171882
+
+WiFiClientSecure client;
 
 #define online 37  //pin for online LED indicator
 
 #define SPIFFS LittleFS
+
+FTPServer ftpSrv(LittleFS);
 
 char *filename;
 String fn;
@@ -161,10 +187,11 @@ unsigned int localUDPport = 123;  // local port to listen for UDP packets
 unsigned char incomingPacket[255];
 unsigned char replyPacket[] __attribute__((section(".dram0.data"))) = "Hi there! Got the message :-)";
 
-#define NTP1 "us.pool.ntp.org"
-#define NTP0 "time.nist.gov"
+#define NTP0 "us.pool.ntp.org"
+#define NTP1 "time.nist.gov"
 
 #define TZ "EST+5EDT,M3.2.0/2,M11.1.0/2"
+RTC_DATA_ATTR char savedTZ[] = "EST+5EDT,M3.2.0/2,M11.1.0/2";
 
 int DOW, MONTH, DATE, YEAR, HOUR, MINUTE, SECOND;
 
@@ -200,8 +227,6 @@ AsyncEventSource events("/events");  // event source (Server-Sent events)
 
 #define LISTEN_PORT 80
 
-FtpServer ftpSrv;  //set #define FTP_DEBUG in ESP8266FtpServer.h to see ftp verbose on serial
-
 const int ledPin = 14;  //ESP8266, RobotDyn WiFi D1
 
 int trigPin = 14;  //Orange wire
@@ -214,19 +239,33 @@ int dt = 50;
 int reconnect;
 
 // ===================================================
-// Alert cooldown globals  --Version 2.0
+// Alert globals  --Version 3.0
 // ===================================================
-bool alertFlag = false;           // true when water is high
-bool alertAcknowledged = false;   // true when user acknowledges
-int alertCount = 0;               // number of alerts sent
-unsigned long lastAlertTime = 0;  // millis() of last alert
+bool didFire = false;
+bool alertFlag = false;           // true when water is currently high/flooding
+bool alertAcknowledged = false;   // true when user acknowledges via web
+int alertCount = 0;               // number of alerts sent this event
+unsigned long lastAlertTime = 0;  // millis() of last alert sent
+
+bool floodFlag = false;  // true when sensor reads 0.0 (submerged)
+
+// Latching web banner -- stays set until user clears via web page
+// even after water returns to normal.  Gives morning-after visibility.
+bool alertLatched = false;      // true once any alert fires
+bool alertWaterNormal = false;  // true when water returned normal but not yet cleared
 
 // Phase 1: first 3 alerts every 5 minutes
-const unsigned long PHASE1_INTERVAL = 300000UL;  // 5 minutes
+const unsigned long PHASE1_INTERVAL = 300000UL;
 
-// Phase 2: after 3 alerts every 10 minutes
-const unsigned long PHASE2_INTERVAL = 600000UL;  // 10 minutes
+// Phase 2: after 3 alerts, every 10 minutes
+const unsigned long PHASE2_INTERVAL = 600000UL;
+
 // ===================================================
+// Sinric Pro globals
+// ===================================================
+bool myPowerState = true;
+bool lastSinricState = false;
+#define pass 2
 
 void setup(void) {
 
@@ -253,20 +292,31 @@ void setup(void) {
   Wire.begin(SDA, SCL);
 
   configTime(0, 0, NTP0, NTP1);
-  setenv("TZ", "EST+5EDT,M3.2.0/2,M11.1.0/2", 3);  // this sets TZ to Indianapolis, Indiana
+  setenv("TZ", TZ, 3);  // Indianapolis, Indiana
   tzset();
+  syncNTP();
 
   delay(500);
 
-  started = 1;  //Server started
-
-  delay(500);
-
-  LittleFS.begin(false);
+  setupSinricPro();
+  
+  LittleFS.begin(true);
 
   Serial.println("LittleFS opened!");
   Serial.println("");
-  ftpSrv.begin("admin", "sumpone");  //username, password for ftp.
+
+  bool fsok = LittleFS.begin();
+  Serial.printf_P(PSTR("FS init: %s\n"), fsok ? PSTR("ok") : PSTR("fail!"));
+
+  //Serial.printf_P(PSTR("\nConnected to %s, IP address is %s\n"), ssid, WiFi.localIP().toString().c_str());
+
+  // setup the ftp server with username and password
+  // ports are defined in FTPCommon.h, default is
+  //   21 for the control connection
+  //   50009 for the data connection (passive mode by default)
+  ftpSrv.begin(F(ftpUser), F(ftpPassword));  //username, password for ftp.  set ports in ESP8266FtpServer.h  (default 21, 50009 for PASV)
+
+  LittleFS.format();
 
   serverAsync.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request) {
     PATH = "/FAVICON";
@@ -350,13 +400,31 @@ void setup(void) {
                    request->redirect("/sump");
                  });
 
+  // Clear latching web banner -- user confirms they saw the alert
+  serverAsync.on("/clear-latch", HTTP_POST,
+                 [](AsyncWebServerRequest *request) {
+                   alertLatched = false;
+                   alertWaterNormal = false;
+                   Serial.println("Alert banner cleared by user.");
+                   request->redirect("/sump");
+                 });
+
   serverAsync.onNotFound(notFound);
 
   serverAsync.begin();
 
-  Serial.println("*** Ready ***");
+  started = 1;  //Server started
 
-  // NOTE: removed  requested = 1  here to prevent boot alert  --Version 2.0
+  getDateTime();
+  lastUpdate = dtStamp;  // populate immediately at boot
+  ultrasonic();          // get first distance reading too
+
+  delay(500);
+
+  ElegantOTA.begin(&serverAsync);
+  Serial.println("ElegantOTA ready -- browse to http://<ip>/update to flash.");
+
+  Serial.println("*** Ready ***");
 }
 
 // How big our line buffer should be. 100 is plenty!
@@ -367,6 +435,17 @@ void loop() {
   int flag;
 
   delay(1);
+
+  // Feed watchdog only when WiFiManager portal is not active.
+  // During portal activity wm.process() needs full loop time
+  // without watchdog interference.
+  if (!wm.getConfigPortalActive()) {
+    watchdogCounter = 0;
+  }
+
+  wm.process();       // serves WiFiManager portal until credentials saved
+  ElegantOTA.loop();  // handles OTA upload progress and reboot callbacks
+  SinricPro.handle();  //Handles Alexa alerts
 
   int packetSize = UDP.parsePacket();
 
@@ -475,33 +554,38 @@ void loop() {
     ESP.restart();
   }
 
-  watchdogCounter = 0;  //Resets the watchdogCount
+  //watchdogCounter = 0;  //Resets the watchdogCount
 
-  ////////////////////////////////////////////////////// FTP ///////////////////////////////////
-  for (int x = 1; x < 5000; x++) {
-    ftpSrv.handleFTP();
-  }
-  ///////////////////////////////////////////////////////////////////////////////////////////////
+  ftpSrv.handleFTP();
 
   getDateTime();
 
-  //Executes every 30 seconds routine
-  if (SECOND % 30 == 0) {
+  //Executes every 5 minute routine
+  if (MINUTE % 5 == 0 && !didFire) {
+
+    didFire = true;  // prevent re-firing within same minute
 
     flag = 1;
 
     Serial.println("");
-    Serial.println("Thirty second routine");
+    Serial.println("Five minute routine");  // fix comment too
     Serial.println(dtStamp);
-    lastUpdate = dtStamp;  //store dtstamp for use on dynamic web page
-    logtoSD();             // Log FIRST -- write distance to LOG file, close cleanly
-    delay(100);            // Small breathe between file operations
-    ultrasonic();          // Sensor read SECOND -- alert/ALERT.TXT write safe after log closed
+    lastUpdate = dtStamp;
+    logtoSD();
+    delay(100);
+    ultrasonic();
 
     delay(1000);
   }
 
+  // Reset flag when no longer on a 5-minute mark
+  if (MINUTE % 5 != 0) {
+    didFire = false;
+  }
+
   flag = 0;
+
+  handleSinricRepeating();
 
   //Collect "LOG.TXT" Data for one day; do it early (before 00:00:00) so day of week still equals 6.
   if ((HOUR == 23) && (MINUTE == 57) && (SECOND == 0)) {
@@ -510,43 +594,66 @@ void loop() {
 }
 
 String buildAlertButtonHTML() {
-  // Normal water level
-  if (!alertFlag) {
-    return "<p class='status-normal'>&#x2705; Water Level Normal</p>";
+
+  // FLOODING -- red, no auto-clear
+  if (floodFlag) {
+    return String(
+      "<p class='status-flood'>&#x1F6A8; FLOODING DETECTED -- IMMEDIATE ATTENTION REQUIRED</p>"
+      "<br>"
+      "<form action='/acknowledge' method='POST'>"
+      "<button class='btn-alert'>&#x26A0;&#xFE0F; Acknowledge</button>"
+      "</form>");
   }
 
-  // High water — not acknowledged
+  // HIGH WATER -- active, not acknowledged
   if (alertFlag && !alertAcknowledged) {
     return String(
+      "<p class='status-alert'>&#x26A0;&#xFE0F; HIGH WATER ALERT</p>"
       "<form action='/acknowledge' method='POST'>"
       "<button class='btn-alert'>&#x26A0;&#xFE0F; Acknowledge Alert</button>"
       "</form>");
   }
 
-  // High water — acknowledged
+  // HIGH WATER -- active, acknowledged
   if (alertFlag && alertAcknowledged) {
     return String(
-      "<p class='status-ack'>&#x26A0;&#xFE0F; Alert Acknowledged — Water Still High</p>"
+      "<p class='status-ack'>&#x26A0;&#xFE0F; Alert Acknowledged -- Water Still High</p>"
       "<br>"
       "<form action='/resume' method='POST'>"
       "<button class='btn-resume'>&#x1F514; Resume Alerts</button>"
       "</form>");
   }
 
-  return "";
+  // LATCHED -- water returned to normal but not yet cleared by user
+  // Amber banner -- stays visible until morning acknowledgement
+  if (alertLatched && alertWaterNormal) {
+    return String(
+      "<p class='status-amber'>&#x26A0;&#xFE0F; ALERT -- Water has returned to Normal</p>"
+      "<p class='status-amber'>All Clear sent.  Total alerts: "
+      + String(alertCount) + "</p>"
+                             "<br>"
+                             "<form action='/clear-latch' method='POST'>"
+                             "<button class='btn-resume'>&#x2705; Clear Alert Banner</button>"
+                             "</form>");
+  }
+
+  // NORMAL -- no active or latched alert
+  return "<p class='status-normal'>&#x2705; Water Level Normal</p>";
 }
 
 String processor1(const String &var) {
-  Serial.println("processor called: " + var);
+
+  getDateTime();
 
   if (var == F("TOP")) {
     char dist[10];
-    float safeValue = distanceToTarget;  // ensures valid float
+    float safeValue = distanceToTarget;
     dtostrf(safeValue, 9, 1, dist);
     return String(dist);
   }
 
   if (var == F("DATE")) return dtStamp;
+  if (var == F("LASTUPDATE")) return lastUpdate;  // add this
   if (var == F("CLIENTIP")) return ipREMOTE.toString();
   if (var == F("ALERTBUTTON")) return buildAlertButtonHTML();
 
@@ -713,6 +820,8 @@ void fileStore()  //If 6th day of week, rename "log.txt" to ("log" + month + day
 String getDateTime() {
   struct tm *ti;
 
+  setenv("TZ", savedTZ, 1);  // force reapply every single call
+  tzset();
   tnow = time(nullptr) + 1;
   ti = localtime(&tnow);
   DOW = ti->tm_wday;
@@ -726,6 +835,27 @@ String getDateTime() {
   strftime(strftime_buf, sizeof(strftime_buf), "%a , %m/%d/%Y , %H:%M:%S %Z", localtime(&tnow));
   dtStamp = strftime_buf;
   return (dtStamp);
+}
+
+void handleSinricRepeating() {
+
+  // Flooding -- repeat every 10 minutes
+  if (floodFlag && (MINUTE % 10 == 0) && (SECOND < pass)) {
+    updateAlexa(100);   // full brightness = FLOOD 🔴
+    Serial.println("Sinric FLOOD repeat: " + dtStamp);
+  }
+
+  // High water -- repeat every 5 minutes
+  else if (alertFlag && (MINUTE % 5 == 0) && (SECOND < pass)) {
+    updateAlexa(50);    // half brightness = HIGH WATER 🟡
+    Serial.println("Sinric HIGH WATER repeat: " + dtStamp);
+  }
+
+  // All clear -- send once on return to normal
+  else if (!alertFlag && !floodFlag && device_state.powerState) {
+    updateAlexa(0);     // OFF = all clear ✅
+    Serial.println("Sinric ALL CLEAR sent: " + dtStamp);
+  }
 }
 
 void links() {
@@ -802,12 +932,8 @@ void newDay()  //Collect Data for twenty-four hours; then start a new day
     Serial.println("file open failed");
   }
 
-  connection_state = WiFiConnect(ssid, password);
-  if (!connection_state)
-    Awaits();
-
   EMailSender::EMailMessage message;
-  message.subject = "Sump Monitor -- Daily Heartbeat";
+  message.subject = String(ALERT_TAG) + " Sump Monitor -- Daily Heartbeat";
   message.message = "Sump Monitor is online and operational.  " + dtStamp;
 
   EMailSender::Response resp = emailSend.send("ab9nq.william@gmail.com", message);
@@ -821,6 +947,24 @@ void newDay()  //Collect Data for twenty-four hours; then start a new day
   alertFlag = false;
   alertAcknowledged = false;
   alertCount = 0;
+  alertLatched = false;
+  alertWaterNormal = false;
+  floodFlag = false;
+}
+
+void syncNTP() {
+  Serial.print("Waiting for NTP sync");
+  int attempts = 0;
+  while (time(nullptr) < 1000000000UL && attempts < 40) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  if (time(nullptr) > 1000000000UL) {
+    Serial.println(" NTP synced!");
+  } else {
+    Serial.println(" NTP sync failed -- UTC until next sync.");
+  }
 }
 
 ///////////////////////////////////////////////////////////////
@@ -857,20 +1001,16 @@ String notFound(AsyncWebServerRequest *request) {
 // ===================================================
 void sendAlert() {
 
-  connection_state = WiFiConnect(ssid, password);
-  if (!connection_state)
-    Awaits();
-
   alertCount++;
 
   EMailSender::EMailMessage message;
-  message.subject = "Warning High Water!!! Alert #" + String(alertCount);
+  message.subject = String(ALERT_TAG) + " Warning High Water!!! Alert #" + String(alertCount);
   message.message = "Sump Pump /// Alert high water level! "
                     "/// Alert number: "
                     + String(alertCount) + " /// " + dtStamp;
 
-  EMailSender::Response resp = emailSend.send("10 digit-cell-number5@tmomail.net", message);
-  emailSend.send("gmail-address@gmail.com", message);
+  EMailSender::Response resp = emailSend.send(ALERT_SMS, message);
+  emailSend.send(ALERT_EMAIL, message);
 
   Serial.println("Alert #" + String(alertCount) + " sent: " + dtStamp);
   Serial.println(resp.status);
@@ -878,7 +1018,7 @@ void sendAlert() {
   Serial.println(resp.desc);
 
   // Log alert event to ALERT.TXT
-  delay(100);  // Small breathe before file write
+  delay(100);
   File alertLog = LittleFS.open("/ALERT.TXT", "a");
   if (!alertLog) {
     Serial.println("File '/ALERT.TXT' open failed");
@@ -902,18 +1042,14 @@ void sendAlert() {
 // ===================================================
 void sendAllClear() {
 
-  connection_state = WiFiConnect(ssid, password);
-  if (!connection_state)
-    Awaits();
-
   EMailSender::EMailMessage message;
-  message.subject = "Sump Pit -- All Clear";
+  message.subject = String(ALERT_TAG) + " Sump Pit -- All Clear";
   message.message = "Water level has returned to normal. "
                     "Total alerts sent: "
                     + String(alertCount) + " /// " + dtStamp;
 
-  EMailSender::Response resp = emailSend.send("3173405675@tmomail.net", message);
-  emailSend.send("ab9nq.william@gmail.com", message);
+  EMailSender::Response resp = emailSend.send(ALERT_SMS, message);
+  emailSend.send(ALERT_EMAIL, message);
 
   Serial.println("All Clear sent. Total alerts: " + String(alertCount));
 
@@ -936,8 +1072,31 @@ void sendAllClear() {
   }
 }
 
+void updateAlexa(int powerLevel) {
+
+  // Only send on change
+  if (powerLevel == device_state.powerLevel && 
+      device_state.powerState == (powerLevel > 0)) return;
+
+  SinricProDimSwitch &myDimSwitch = SinricPro[DIMSWITCH_ID];
+
+  if (powerLevel == 0) {
+    device_state.powerState = false;
+    device_state.powerLevel = 0;
+    myDimSwitch.sendPowerStateEvent(false);   // OFF = all clear
+    Serial.println("Alexa: OFF = All Clear");
+  } else {
+    device_state.powerState = true;
+    device_state.powerLevel = powerLevel;
+    myDimSwitch.sendPowerStateEvent(true);    // ON first
+    myDimSwitch.sendPowerLevelEvent(powerLevel); // then level
+    Serial.println("Alexa: ON level=" + String(powerLevel));
+  }
+}
+
 // ===================================================
-// ultrasonic  --get distance in inches  Version 2.0
+// ultrasonic  --get distance in inches  Version 3.0
+// Three states: flooding, high water, normal
 // ===================================================
 void ultrasonic() {
 
@@ -950,36 +1109,87 @@ void ultrasonic() {
   pingTravelTime = pulseIn(echoPin, HIGH);
   delay(25);
   pingTravelDistance = (pingTravelTime * 765. * 5280. * 12) / (3600. * 1000000);
-  //distanceToTarget = (pingTravelDistance / 2);  // Normal use
-  //distanceToTarget = 4.0;  // Testing only -- comment out for deployment!
-  // Fake distance generator for video demo
-  distanceToTarget = random(0, 101) / 10.0;   // 0.0 to 10.0 inches
+  distanceToTarget = (pingTravelDistance / 2);  // normal use
+  distanceToTarget = random(0, 101) / 10.0;     // testing only -- remove for deployment
+
   Serial.print("Distance to Target is: ");
   Serial.print(distanceToTarget, 1);
   Serial.println(" in.");
 
   digitalWrite(echoPin, HIGH);
-
   delay(50);
 
-  // ===================================================
-  // Alert logic with cooldown  --Version 2.0
-  // ===================================================
-  if (distanceToTarget < 3.0)  // Water high threshold
-  {
+  unsigned long now = millis();
 
-    unsigned long now = millis();
+  // ===================================================
+  // STATE 1 -- FLOODING (sensor submerged, reads 0.0)
+  // No cooldown -- alert every cycle.
+  // Unique subject line distinguishes from high water.
+  // ===================================================
+  if (distanceToTarget == 0.0) {
+
+    floodFlag = true;
+    alertFlag = true;
+    alertLatched = true;
+    alertWaterNormal = false;
+
+    getDateTime();
+
+    // Build flooding alert message
+    EMailSender::EMailMessage message;
+    message.subject = String(ALERT_TAG) + " FLOODING -- IMMEDIATE ATTENTION REQUIRED -- Alert #" + String(++alertCount);
+    message.message = "FLOODING DETECTED -- Sensor may be submerged! "
+                      "/// Alert number: "
+                      + String(alertCount) + " /// " + dtStamp;
+
+  EMailSender::Response resp = emailSend.send(ALERT_SMS, message);
+  emailSend.send(ALERT_EMAIL, message);
+  emailSend.send(ALERT_EMAIL2, message);
+
+    Serial.println("FLOOD Alert #" + String(alertCount) + " sent: " + dtStamp);
+
+    // Flooding triggers Alexa Red Alert
+    updateAlexa(100);   // full = FLOOD 🔴
+
+    // Log to ALERT.TXT
+    File alertLog = LittleFS.open("/ALERT.TXT", "a");
+    if (alertLog) {
+      alertLog.print("FLOODING Alert #");
+      alertLog.print(alertCount);
+      alertLog.print(" -- Distance: ");
+      alertLog.print(distanceToTarget, 1);
+      alertLog.print(" inches -- ");
+      alertLog.print(dtStamp);
+      alertLog.print(" -- Email status: ");
+      alertLog.println(resp.status);
+      alertLog.close();
+    }
+  }
+
+  // ===================================================
+  // STATE 2 -- HIGH WATER (above 0.0, below threshold)
+  // Phase 1/2 cooldown applies.
+  // ===================================================
+  else if (distanceToTarget > 0.0 && distanceToTarget < 3.0) {
+
+    floodFlag = false;  // no longer flooding if we were
+    alertLatched = true;
+    alertWaterNormal = false;
 
     // First alert -- fire immediately
     if (!alertFlag) {
       alertFlag = true;
-      alertAcknowledged = false;  // reset acknowledge
+      alertAcknowledged = false;
       alertCount = 0;
       lastAlertTime = now;
       getDateTime();
       sendAlert();
+
+      // High water  
+      updateAlexa(50);    // half = HIGH WATER 🟡
+
     }
-    // Only continue alerting if NOT acknowledged
+    // Continue alerting if not acknowledged
     else if (!alertAcknowledged) {
       // Phase 1 -- alerts 2 & 3 every 5 minutes
       if (alertCount < 3 && (now - lastAlertTime >= PHASE1_INTERVAL)) {
@@ -994,19 +1204,34 @@ void ultrasonic() {
         sendAlert();
       }
     }
+  }
 
-  } else {
+  // ===================================================
+  // STATE 3 -- NORMAL (at or above threshold)
+  // Send single All Clear SMS/email if we were alerting.
+  // Latch stays set on web page until user clears it.
+  // ===================================================
+  else {
 
-    // Water normal -- send All Clear if we were alerting
+    floodFlag = false;
+
+    // Send All Clear SMS/email once when water returns to normal
     if (alertFlag) {
       getDateTime();
-      sendAllClear();
+      sendAllClear();           // single SMS + email -- back to bed!
+      alertWaterNormal = true;  // amber banner on web page
+
+      // Normal
+      updateAlexa(0);     // off = all clear ✅
     }
 
-    alertFlag = false;          // reset flag
-    alertAcknowledged = false;  // reset acknowledge
-    alertCount = 0;             // reset counter
+    alertFlag = false;
+    alertAcknowledged = false;
+    alertCount = 0;
+    // NOTE: alertLatched stays TRUE until user clears via web page
+    // so the event is visible next morning even if it was momentary.
   }
+  updateAlexa(false);   
   // ===================================================
 }
 
@@ -1014,28 +1239,53 @@ void Wifi_Start() {
 
   WiFi.mode(WIFI_STA);
 
-  Serial.print("Connecting to ");
-  Serial.println(ssid);
+  // ------------------------------------------------------------------
+  // Static IP -- matches Caddyfile reverse proxy and Tailscale config.
+  // Device will always be reachable at 192.168.12.22:80
+  // ------------------------------------------------------------------
+  IPAddress _ip, _gateway, _subnet, _dns;
+  _ip.fromString("192.168.12.22");
+  _gateway.fromString("192.168.12.1");
+  _subnet.fromString("255.255.255.0");
+  _dns.fromString("192.168.12.1");
+  wm.setSTAStaticIPConfig(_ip, _gateway, _subnet, _dns);
 
-  IPAddress ip;
-  IPAddress gateway;
-  IPAddress subnet;
-  IPAddress dns;
-
-  WiFi.begin(ssid, password);
-
-  Serial.println();
-  Serial.print("MAC: ");
-  Serial.println(WiFi.macAddress());
-
-  WiFi.config(ip, gateway, subnet, dns);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(100);
-    Serial.print(".");
+  // ------------------------------------------------------------------
+  // Reset button: hold WIFI_RESET_PIN LOW for 3 seconds at boot to
+  // wipe saved credentials and reopen the captive portal setup page.
+  // ------------------------------------------------------------------
+  pinMode(WIFI_RESET_PIN, INPUT_PULLUP);
+  delay(100);
+  if (digitalRead(WIFI_RESET_PIN) == LOW) {
+    unsigned long holdStart = millis();
+    Serial.println("Reset button held -- hold 3 seconds to confirm wipe...");
+    while (digitalRead(WIFI_RESET_PIN) == LOW) {
+      if (millis() - holdStart >= 3000) {
+        Serial.println("Wiping WiFi credentials -- restarting into portal.");
+        //wm.resetSettings();
+        ESP.restart();
+      }
+    }
+    Serial.println("Released before 3 seconds -- continuing normal boot.");
   }
 
-  WiFi.waitForConnectResult();
+  // ------------------------------------------------------------------
+  // Non-blocking mode -- portal served via wm.process() in loop().
+  // Sketch continues running while user enters credentials.
+  // ------------------------------------------------------------------
+  wm.setConfigPortalBlocking(true);
+  wm.setConfigPortalTimeout(180);  // close portal after 3 min if unused
+  wm.setAPClientCheck(true);       // don't timeout if client connected
 
-  Serial.printf("Connection result: %d\n", WiFi.waitForConnectResult());
+  if (!wm.autoConnect("SumpMonitor-Setup")) {
+    Serial.println("No saved credentials -- portal is open.");
+    Serial.println("Connect to AP 'SumpMonitor-Setup', browse to 192.168.4.1");
+    Serial.println("Sketch continues running while portal is active.");
+  } else {
+    Serial.println("WiFi connected via saved credentials.");
+    Serial.print("IP address:  ");
+    Serial.println(WiFi.localIP());
+    Serial.print("Port:        ");
+    Serial.println(LISTEN_PORT);
+  }
 }
