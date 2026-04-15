@@ -1,7 +1,7 @@
 //
 //   "Sump_Sender.ino" and  
 //   variableInput.h library
-//   William M. Lucid   10/06/2019   @ 15:02 EDT    
+//   William Lucid   04/25/2026   @ 16:37 EDT    
 // 
 
 // Replace with your network details  
