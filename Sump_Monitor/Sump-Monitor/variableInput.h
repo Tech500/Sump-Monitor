@@ -19,7 +19,7 @@ const char * udpAddress2 = "time.nist.gov";
 
 //publicIP accessiable over Internet with Port Forwarding; know the risks!!!
 //WAN IP Address.  Or use LAN IP Address --same as server ip; no Internet access. 
-#define publicIP "your Tailscale domain machine/"  //Part of href link for "GET" requests
+#define serverIp "your Tailscale domain machine/"  //Part of href link for "GET" requests
 
 //Find your public ipAddress:  https://whatismyipaddress.com/
 
