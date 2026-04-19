@@ -75,6 +75,6 @@ const char* http_password = "yours";
 // ===================================================
 #define APP_KEY    "yours"
 #define APP_SECRET "yours"
-#define HIGH_WATER_ID  "yours"
-#define FLOODING_ID    "yours"
-#define ALL_CLEAR_ID   "yours"
+#define HIGHWATER  "yours"
+#define FLOODING    "yours"
+#define ALL_CLEAR   "yours"
