@@ -109,7 +109,7 @@ const char HTML3[] PROGMEM = R"====(
 
       <div class="panel">
         <h3 style="color:#64B5F6;">&#x1F4CF; Pit Activity -- Distance To Target</h3>
-        <iframe src="http://192.168.12.146:3000/d-solo/adqlkqm/sump-monitor?orgId=1&timezone=browser&panelId=panel-5" frameborder="0"></iframe>
+        <iframe src="http://192.168.12.146:3000/d-solo/adqlkqm/sump-monitor?orgId=1&timezone=browser&panelId=panel-6" frameborder="0"></iframe>
       </div>
 
     </div>
