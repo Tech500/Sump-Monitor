@@ -267,11 +267,13 @@ void sendToGrafana(const char* eventType) {
     
     String body = "{\"type\":\"" + String(eventType) + 
                   "\",\"location\":\"sump_pit\"" +
-                  ",\"distance\":" + String(distanceToTarget, 1) + "}";  
+                  ",\"distance\":" + String(distanceToTarget, 1) +
+                  ",\"pitActivity\":" + String(pitActivity, 1) +
+                  ",\"dtStamp\":\"" + dtStamp + "\"}";  
     
     int responseCode = http.POST(body);
-    Serial.printf("[Grafana] %s distance: %.1f response: %d\n", 
-                  eventType, distanceToTarget, responseCode);    
+    Serial.printf("[Grafana] %s distance: %.1f pitActivity: %.1f response: %d\n", 
+                  eventType, distanceToTarget, pitActivity, responseCode);    
     http.end();
 }
 
@@ -872,7 +874,7 @@ void distanceLog(){
   log.print(dtStamp);
   log.println();
 
-  distanceToTarget;
+  //distanceToTarget;
 }  
 
 void logtoSD() {
@@ -1128,9 +1130,10 @@ void sendAllClear() {  //ALLCLEAR
 }
 
 String ultrasonic() {
-  // Simulate sensor data using random generator for testing
-  // Generates a float between 0.0 and 10.0
   distanceToTarget = random(0, 101) / 10.0;
+
+  pitActivity = distanceToTarget;  // snapshot for pit-activity graph
+  // dtStamp already set prior to this call, no need to refresh
 
   delay(100);
 
@@ -1142,7 +1145,6 @@ String ultrasonic() {
   Serial.print(distanceToTarget, 1);
   Serial.println(" in.");
 
-  // Determine condition based on the simulated distance
   if (distanceToTarget <= 0.5) {
     condition = "FLOODING";
   } else if (distanceToTarget <= 3.0) {
