@@ -930,7 +930,7 @@ void logtoSD() {
 
 void masterAlexa(String condition) {
 
-  getDateTime();
+  //getDateTime();
   Serial.println(dtStamp);
 
   SinricProContactsensor &myHighWater = SinricPro[HIGHWATER];
