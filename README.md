@@ -19,6 +19,9 @@ An ESP32-S3 based IoT project that continuously monitors the water level in a ba
 * **LittleFS logging** — Distance, condition, and pump runtime logs stored in ESP32-S3 flash; auto-purged every Sunday at midnight
 * **InfluxDB time-series storage** — All pit events and readings stored on Raspberry Pi for long-term trending
 * **Built-in file browser** — `/SdBrowse` route lists all LittleFS log files as clickable links; clicking any file opens the embedded File Reader
+* **WiFiManager** — Captive portal for WiFi configuration; no hardcoded credentials required
+* **ElegantOTA** — Over-the-air firmware updates via web browser
+* **FTP access** — FTPServer provides direct access to LittleFS files
 * **Arduino IDE compatible** — Written in C/C++ with ESP32 board support
 
 ---
@@ -58,7 +61,7 @@ An ESP32-S3 based IoT project that continuously monitors the water level in a ba
 │  InfluxDB  → time-series event & reading storage    │
 │  Grafana   → dashboard panels (iframed in ESP32)    │
 │  My Media  → serves Claxion3.mp3 to Alexa           │
-│  Tailscale/Caddy → secure remote access             │
+│  Tailscale Funnel → secure remote access (port 80)  │
 └─────────────────────────────────────────────────────┘
                           │
                           ▼
@@ -104,16 +107,49 @@ An ESP32-S3 based IoT project that continuously monitors the water level in a ba
   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
   ```
 * Required libraries (install via Arduino Library Manager):
-  + `ESPAsyncWebServer`
-  + `AsyncTCP`
-  + `ESP Mail Client`
-  + `SinricPro`
-  + `InfluxDB Client for Arduino`
+
+```cpp
+#include "Arduino.h"
+#include <EMailSender.h>
+#include <WiFi.h>
+#include <WiFiUdp.h>
+#include <WebSocketsClient.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <WebServer.h>
+#include <WiFiManager.h>
+#include <ElegantOTA.h>
+#include <WiFiClientSecure.h>
+#include <SD.h>
+#include <FS.h>
+#include <LittleFS.h>
+#include <FTPServer.h>
+#include <HTTPClient.h>
+#include <sys/time.h>
+#include <time.h>
+#include <Ticker.h>
+#include <Wire.h>
+#include <SinricPro.h>
+#include "SinricProContactsensor.h"
+#include <SinricProWebsocket.h>
+#include "variableInput.h"
+```
+
+> ⚠️ **Important — Sketch Folder:**
+> Copy the **entire Sump-Monitor sketch folder** to your Arduino sketches directory.
+> The following files **must all be present** in the sketch folder together:
+> - `sump-monitor_v9.5.ino`
+> - `index1.h`
+> - `index2.h`
+> - `index3.h`
+> - `index4.h`
+> - `variableInput.h`
 
 **Raspberry Pi services required:**
   + [InfluxDB](https://docs.influxdata.com/influxdb/v2/) — time-series database
   + [Grafana](https://grafana.com/docs/grafana/latest/) — dashboard and visualization
   + [My Media for Alexa](https://docs.bizmodeller.com/my-media-for-alexa/) — local media server for Alexa alarm sound
+  + [Tailscale](https://tailscale.com) — secure remote access via Funnel
 
 ---
 
@@ -178,14 +214,36 @@ For My Media Raspberry Pi installation see:
 
 ---
 
+## WiFi Configuration — WiFiManager
+
+This project uses **WiFiManager** for WiFi setup — no hardcoded SSID or password required.
+
+**First Boot / Network Not Found:**
+1. ESP32-S3 starts automatically in Access Point mode
+2. On your phone or laptop connect to WiFi AP: **`SumpMonitor-Setup`**
+3. Browser will automatically open the WiFiManager portal — or manually browse to **`192.168.4.1`**
+4. Enter your WiFi **SSID** and **Password** and click Save
+5. Credentials are saved to flash — ESP32-S3 reboots and connects to your network
+
+**Subsequent Boots:**
+- If saved network is found → connects automatically ✅
+- If saved network is **not found** → captive portal opens automatically ✅
+
+> 💡 Moving the device to a new location? Simply power it on — if it can't find the saved network the portal opens automatically. No manual reset required.
+
+---
+
 ## Configuration
 
-Open the configuration file and fill in your credentials and settings:
+Open **`variableInput.h`** and fill in your credentials and settings:
 
 ```cpp
-// WiFi Credentials
-#define WIFI_SSID        "your_wifi_ssid"
-#define WIFI_PASSWORD    "your_wifi_password"
+// Static IP Configuration — must match router DHCP reservation
+IPAddress local_IP(192, 168, 1, XXX);    // Your reserved IP for ESP32-S3
+IPAddress gateway(192, 168, 1, 1);       // Your router gateway
+IPAddress subnet(255, 255, 255, 0);      // Subnet mask
+IPAddress primaryDNS(8, 8, 8, 8);        // Primary DNS
+IPAddress secondaryDNS(8, 8, 4, 4);      // Secondary DNS
 
 // Email Alert Settings
 // Use a dedicated Google secondary account — not your primary Gmail
@@ -217,6 +275,15 @@ Open the configuration file and fill in your credentials and settings:
 #define HIGHWATER_CM     XX    // Distance (cm) that triggers HIGHWATER
 #define FLOODING_CM      XX    // Distance (cm) that triggers FLOODING
 ```
+
+> **Static IP & DHCP Reservation — Required:**
+> The ESP32-S3 must have a **fixed IP address** — the Grafana iframe URLs embedded
+> in the web interface HTML depend on it. Configure two things:
+> 1. **Router DHCP reservation** — assign a fixed IP to the ESP32-S3 MAC address
+>    in your router's admin panel so the router always gives it the same address.
+> 2. **variableInput.h static IP** — set the same IP in the static IP configuration
+>    above so the ESP32-S3 requests that address on boot.
+> Both must match exactly for reliable operation.
 
 > **Gmail users:** A standard Gmail password will not work — generate a dedicated
 > **App Password** for this project.
@@ -300,9 +367,19 @@ The calming well provides a clean, stable column of water with a flat reflective
 
 ## Remote Access
 
-For secure remote access from anywhere without opening firewall ports, [Tailscale](https://tailscale.com) combined with [Caddy](https://caddyserver.com) provides an elegant zero-trust solution hosted on the Raspberry Pi.
+This project uses [Tailscale Funnel](https://tailscale.com/kb/1223/funnel) on the Raspberry Pi to provide secure remote access to the Grafana dashboard without opening firewall ports or configuring dynamic DNS.
 
-> 📖 [**Secure Weather Dashboards via Tailscale and Caddy**](https://www.hackster.io/AB9NQ/secure-weather-dashboards-via-tailscale-and-caddy-94c424)
+**Enable Tailscale Funnel on the Raspberry Pi:**
+```bash
+tailscale funnel --bg 80
+```
+
+Tailscale Funnel proxies external HTTPS traffic to Grafana running locally on port 3000:
+```
+https://your-pi-name.tailnet-name.ts.net  →  http://127.0.0.1:3000
+```
+
+This gives you secure, authenticated access to your Grafana dashboard from anywhere — no Caddy, no port forwarding, no dynamic DNS required.
 
 ---
 
