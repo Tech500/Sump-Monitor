@@ -1,52 +1,186 @@
 # Sump-Monitor
 
-**Sump pit monitor using an ultrasonic transducer with text and email alerts.**
+**Sump pit monitor using an ultrasonic transducer with text, email, and Alexa alerts.**
 
-An ESP32-based IoT project that continuously monitors the water level in a basement sump pit using an ultrasonic distance sensor. When the water level rises to a configured threshold, the system sends both SMS text and email alert notifications to keep you informed of potential pump failures or flooding risks — before a problem becomes a disaster.
+An ESP32-S3 based IoT project that continuously monitors the water level in a basement sump pit using a waterproof ultrasonic transducer. When the water level rises to a configured threshold, the system sends SMS text, email, and Alexa voice alerts — and logs all pit activity for historical review. A full Grafana dashboard, served directly from the ESP32-S3 web interface, provides real-time and historical visualization of pit conditions.
+
+> ⚠️ **IMPORTANT — Only one board is supported.** See [Hardware Requirements](#hardware-requirements) before purchasing any components.
 
 ---
 
 ## Features
 
-- **Ultrasonic water level sensing** — Uses an ultrasonic transducer (e.g., JSN-SR04T or HC-SR04) to measure distance to the water surface, calculating the current pit water level
-- **SMS text alerts** — Sends text message notifications when water level exceeds the configured alarm threshold
-- **Email alerts** — Sends email notifications simultaneously with text alerts for redundant notification coverage
-- **Built-in web interface** — Local network web server for real-time monitoring of current water level readings
-- **Arduino IDE compatible** — Written in C/C++, programmed using the Arduino IDE with ESP32 board support
+* **Ultrasonic water level sensing** — Waterproof JSN-SR04T transducer measures distance to the water surface continuously
+* **SMS text alerts** — Sends text message notifications when water level exceeds configured thresholds
+* **Email alerts** — Simultaneous email notifications for redundant coverage; a dedicated Google secondary account is strongly recommended
+* **Alexa voice alerts** — When FLOODING is detected, Alexa announces "Sump pit flooding take immediate action" and plays three Claxion alarm blasts across all Echo devices via SinricPro
+* **Grafana dashboard** — Live and historical pit condition graphs embedded via iframes in the ESP32-S3 web interface, auto-refreshing every 30 seconds
+* **Multi-page web interface** — Full AsyncWebServer application with Main Menu, Graphs, File Browser, and File Reader routes
+* **LittleFS logging** — Distance, condition, and pump runtime logs stored in ESP32-S3 flash; auto-purged every Sunday at midnight
+* **InfluxDB time-series storage** — All pit events and readings stored on Raspberry Pi for long-term trending
+* **Built-in file browser** — `/SdBrowse` route lists all LittleFS log files as clickable links; clicking any file opens the embedded File Reader
+* **Arduino IDE compatible** — Written in C/C++ with ESP32 board support
+
+---
+
+## System Architecture
+
+```
+┌─────────────────────────────────────────────────────┐
+│              ESP32-S3 N16R8                         │
+│                                                     │
+│  JSN-SR04T ──► Ultrasonic sensing                   │
+│                                                     │
+│  AsyncWebServer routes:                             │
+│    /sump      → Main Menu (live readings)           │
+│    /graph     → Grafana iframe dashboard            │
+│    /SdBrowse  → LittleFS log file browser           │
+│    /show      → File Reader (index4.h)              │
+│    404 handler→ URL → filename → redirect /show     │
+│                                                     │
+│  LittleFS logs:                                     │
+│    Distance log  (DistanceToTarget + timestamp)     │
+│    Condition log (event + distance + timestamp)     │
+│    PUMP log      (pump runtime)                     │
+│    Auto-purged every Sunday at midnight             │
+│                                                     │
+│  Alerts:                                            │
+│    SMS  ──────────────────────────────► Phone       │
+│    Email ─────────────────────────────► Inbox       │
+│    SinricPro ─────────────────────────► Alexa       │
+│    InfluxDB write ────────────────────► Raspberry Pi│
+└─────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────┐
+│              Raspberry Pi (Required)                │
+│                                                     │
+│  InfluxDB  → time-series event & reading storage    │
+│  Grafana   → dashboard panels (iframed in ESP32)    │
+│  My Media  → serves Claxion3.mp3 to Alexa           │
+│  Tailscale/Caddy → secure remote access             │
+└─────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────┐
+│              Alexa Echo Devices                     │
+│                                                     │
+│  SinricPro virtual sensors:                         │
+│    FLOODING  → announces alert + 3 Claxion blasts   │
+│    HIGHWATER → high water warning                   │
+│    ALLCLEAR  → water level normal                   │
+└─────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Hardware Requirements
 
-| Component | Description |
-|---|---|
-| ESP32 Development Board | e.g., ESP32 DevKit V1 or similar |
-| Ultrasonic Transducer | JSN-SR04T (waterproof, recommended) or HC-SR04 |
-| Power Supply | 5V USB or regulated power adapter |
-| Enclosure | Weatherproof enclosure suitable for basement/pit environment |
+> ⚠️ **Critical — Only One Board Is Supported:**
+> This project requires the **ESP32-S3 with N16R8** (16MB Flash / 8MB PSRAM).
+> The combined memory demands of AsyncWebServer, LittleFS, ESP Mail Client, SinricPro,
+> InfluxDB client, and WiFi libraries require the full N16R8 memory configuration.
+> **No other ESP32 board is supported or will work.**
+> Earlier versions of this project ran on an ESP32 DevKit V1 — the current codebase
+> will not run on that hardware.
 
-> **Note:** The JSN-SR04T waterproof variant is strongly recommended over the HC-SR04 for sump pit environments due to the high humidity and potential water splash exposure.
+| Component | Description |
+| --- | --- |
+| **ESP32-S3 N16R8** | 16MB Flash / 8MB PSRAM — **required, no substitutions** |
+| **JSN-SR04T** | Waterproof ultrasonic transducer — 5V, JST connector |
+| **Voltage Divider** | Required on ECHO pin — ESP32-S3 is 3.3V only (see Wiring) |
+| **Raspberry Pi** | Required — runs InfluxDB, Grafana, and My Media server |
+| **Power Supply** | 5V regulated for ESP32-S3; separate 5V for JSN-SR04T |
+| **Enclosure** | Weatherproof enclosure suitable for basement/pit environment |
 
 ---
 
 ## Software Requirements
 
-- [Arduino IDE](https://www.arduino.cc/en/software) (1.8.x or 2.x)
-- ESP32 board support package — Add the following URL to **File > Preferences > Additional Board Manager URLs**:
+* [Arduino IDE](https://www.arduino.cc/en/software) (1.8.x or 2.x)
+* ESP32 board support package — Add the following URL to **File > Preferences > Additional Board Manager URLs**:
+
   ```
   https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
   ```
-- Required libraries (install via Arduino Library Manager):
-  - `ESPAsyncWebServer`
-  - `AsyncTCP`
-  - `ESP Mail Client` (for email alerts)
-  - Any additional libraries referenced in the sketch header
+* Required libraries (install via Arduino Library Manager):
+  + `ESPAsyncWebServer`
+  + `AsyncTCP`
+  + `ESP Mail Client`
+  + `SinricPro`
+  + `InfluxDB Client for Arduino`
+
+**Raspberry Pi services required:**
+  + [InfluxDB](https://docs.influxdata.com/influxdb/v2/) — time-series database
+  + [Grafana](https://grafana.com/docs/grafana/latest/) — dashboard and visualization
+  + [My Media for Alexa](https://docs.bizmodeller.com/my-media-for-alexa/) — local media server for Alexa alarm sound
+
+---
+
+## Grafana Dashboard
+
+The ESP32-S3 web interface serves an HTML page with embedded Grafana iframes, presenting a complete pit conditions dashboard auto-refreshing every 30 seconds. The dashboard includes:
+
+* **All Events** — combined timeline of ALLCLEAR, FLOODING, and HIGHWATER events
+* **High Water Events** — bar chart of high water occurrences
+* **Flooding Events** — bar chart of flooding occurrences
+* **All Clear Events** — bar chart of all-clear restorations
+* **Pit Activity — Distance to Target** — continuous distance-to-water-surface readings in inches
+
+Navigate to `http://<ESP32_IP>/graph` to view the dashboard.
+
+---
+
+## Web Interface Routes
+
+| Route | Description |
+| --- | --- |
+| `/sump` | Main Menu — live water level readings and system status |
+| `/graph` | Grafana iframe dashboard — pit conditions and event history |
+| `/SdBrowse` | LittleFS file browser — lists all log files as clickable links |
+| `/show` | File Reader — displays log file contents (via `index4.h` embedded script) |
+| `404 handler` | Converts `.txt` URL to LittleFS filename (fn) and redirects to `/show` |
+
+---
+
+## LittleFS Logging
+
+All logs are stored as `.txt` files in the ESP32-S3 LittleFS filesystem (enabled by the 16MB flash of the N16R8). Logs are automatically purged every **Sunday at midnight**.
+
+| Log | Contents |
+| --- | --- |
+| **Distance Log** | DistanceToTarget readings with timestamp |
+| **Condition Log** | Event name (FLOODING/HIGHWATER/ALLCLEAR), distance, timestamp |
+| **PUMP Log** | Pump runtime duration with timestamp |
+
+The `.txt` extension is used by the not-found handler to convert a clicked URL into a LittleFS filename, which is then internally redirected to the `/show` route where `index4.h` handles file reading and display.
+
+---
+
+## Alexa Integration
+
+This project uses [SinricPro](https://sinric.pro) to create three virtual contact sensors that trigger Alexa routines:
+
+| Sensor | Trigger | Alexa Action |
+| --- | --- | --- |
+| `FLOODING` | Water at flood level | Announces alert + plays 3 Claxion alarm blasts via My Media |
+| `HIGHWATER` | Water at high-water mark | High water warning announcement |
+| `ALLCLEAR` | Water returns to normal | All clear announcement |
+
+> 💡 **SinricPro** offers a free plan covering 3 devices — exactly what this project needs.
+> Additional devices are available at $3.00 per device per year.
+
+For complete Alexa and SinricPro setup instructions see:
+**[Alexa & SinricPro Setup Guide](https://github.com/Tech500/Sump-Monitor)** *(PDF in /docs)*
+
+For My Media Raspberry Pi installation see:
+**[My Media for Alexa Documentation](https://docs.bizmodeller.com/my-media-for-alexa/)**
 
 ---
 
 ## Configuration
 
-Open the configuration/variable input file (e.g., `variableInput.h` or the `#define` section at the top of the main `.ino` sketch) and fill in your credentials and settings:
+Open the configuration file and fill in your credentials and settings:
 
 ```cpp
 // WiFi Credentials
@@ -54,135 +188,151 @@ Open the configuration/variable input file (e.g., `variableInput.h` or the `#def
 #define WIFI_PASSWORD    "your_wifi_password"
 
 // Email Alert Settings
-#define SMTP_HOST        "smtp.gmail.com"         // or your SMTP server
+// Use a dedicated Google secondary account — not your primary Gmail
+#define SMTP_HOST        "smtp.gmail.com"
 #define SMTP_PORT        465
-#define EMAIL_SENDER     "your_email@gmail.com"
+#define EMAIL_SENDER     "your_secondary@gmail.com"
 #define EMAIL_PASSWORD   "your_app_password"
 #define EMAIL_RECIPIENT  "alert_recipient@email.com"
 
 // SMS / Text Alert Settings (via email-to-SMS gateway)
-// Example: Verizon: 10digitnumber@vtext.com
 #define SMS_GATEWAY      "your_number@carrier_gateway.com"
 
-// Sensor & Alert Thresholds
-#define TRIGGER_PIN      XX     // GPIO pin connected to sensor TRIG
-#define ECHO_PIN         XX     // GPIO pin connected to sensor ECHO
-#define ALARM_LEVEL_CM   XX     // Water level (cm) that triggers alert
+// SinricPro
+#define SINRICPRO_APP_KEY    "your_sinricpro_app_key"
+#define SINRICPRO_APP_SECRET "your_sinricpro_app_secret"
+#define FLOODING_DEVICE_ID   "your_flooding_device_id"
+#define HIGHWATER_DEVICE_ID  "your_highwater_device_id"
+#define ALLCLEAR_DEVICE_ID   "your_allclear_device_id"
+
+// InfluxDB
+#define INFLUXDB_URL     "http://your_pi_ip:8086"
+#define INFLUXDB_TOKEN   "your_influxdb_token"
+#define INFLUXDB_ORG     "your_org"
+#define INFLUXDB_BUCKET  "your_bucket"
+
+// Sensor Thresholds
+#define TRIGGER_PIN      XX    // GPIO pin → sensor TRIG
+#define ECHO_PIN         XX    // GPIO pin → sensor ECHO (via voltage divider)
+#define HIGHWATER_CM     XX    // Distance (cm) that triggers HIGHWATER
+#define FLOODING_CM      XX    // Distance (cm) that triggers FLOODING
 ```
 
-> **Gmail users:** A standard Gmail password will not work — you must generate a dedicated App Password.  
-> See: [How to Get a Gmail App Password](https://www.lifewire.com/get-a-password-to-access-gmail-by-pop-imap-2-1171882)
+> **Gmail users:** A standard Gmail password will not work — generate a dedicated
+> **App Password** for this project.
+> A dedicated **Google secondary account** is strongly recommended to keep
+> project alerts separate from your primary inbox.
 
 ---
 
 ## SMS via Email-to-Text Gateways
 
-To send a text alert, address the email to `10digitnumber@gateway-domain` using your carrier's gateway below.
-
-> ⚠️ **Note:** Email-to-SMS gateways are increasingly being deprecated or restricted by carriers to reduce abuse. Always verify your carrier's current gateway with their support if messages are not delivering.  
-> For a comprehensive and regularly updated carrier list, see: [How to Send Text Messages via Email — SMS & MMS Gateway List](https://20somethingfinance.com/how-to-send-text-messages-sms-via-email-for-free/)
-
-| Carrier | SMS Gateway | Notes |
-|---|---|---|
-| AT&T | ~~`number@txt.att.net`~~ | **Shut down in 2025 — no longer available** |
+| Carrier | SMS Gateway | Status |
+| --- | --- | --- |
+| AT&T | ~~`number@txt.att.net`~~ | **Shut down 2025** |
 | Verizon | `number@vtext.com` | Active |
 | T-Mobile | `number@tmomail.net` | Active |
 | Boost Mobile | `number@sms.myboostmobile.com` | Active |
 | Metro by T-Mobile | `number@mymetropcs.com` | Active |
 | Google Fi | `number@msg.fi.google.com` | Active |
 | US Cellular | `number@email.uscc.net` | Active |
-| Cricket | ~~No longer available~~ | AT&T subsidiary — shut down with AT&T |
+| Cricket | ~~No longer available~~ | AT&T subsidiary |
+
+> ⚠️ Email-to-SMS gateways are increasingly deprecated by carriers.
+> Verify your carrier's current gateway if messages are not delivering.
 
 ---
 
 ## Wiring
 
-| Sensor Pin | ESP32 GPIO |
-|---|---|
+| Sensor Pin | ESP32-S3 |
+| --- | --- |
 | VCC | 5V |
 | GND | GND |
-| TRIG | Defined by `TRIGGER_PIN` |
-| ECHO | Via voltage divider → Defined by `ECHO_PIN` |
+| TRIG | GPIO (defined by `TRIGGER_PIN`) |
+| ECHO | Via voltage divider → GPIO (defined by `ECHO_PIN`) |
 
-> ⚠️ **IMPORTANT — Voltage Divider Required on ECHO pin:**  
-> The ESP32-S3 GPIO pins are **3.3V logic only and are NOT 5V tolerant.** If your ultrasonic transducer operates at 5V (e.g., HC-SR04), the ECHO signal it returns will also be 5V — which **will damage the ESP32-S3** if connected directly.  
->
-> A simple resistor voltage divider on the ECHO line brings the signal down to a safe 3.3V level:
+> ⚠️ **Voltage Divider Required on ECHO pin:**
+> The ESP32-S3 GPIO pins are 3.3V logic only and are **NOT 5V tolerant.**
+> The JSN-SR04T is a 5V device — its ECHO signal will damage the ESP32-S3 if
+> connected directly. A resistor voltage divider is required:
 >
 > ```
-> SENSOR ECHO ──┬── 1kΩ ──── ESP32 ECHO PIN
+> SENSOR ECHO ──┬── 1kΩ ──── ESP32-S3 ECHO PIN
 >               │
 >              2kΩ
 >               │
 >             GND
 > ```
 >
-> This 1kΩ / 2kΩ divider reduces 5V → ~3.3V. Other resistor pairs with a 1:2 ratio (e.g., 10kΩ / 20kΩ) work equally well.  
-> The TRIG pin output from the ESP32-S3 at 3.3V is sufficient to trigger most 5V ultrasonic sensors and does **not** require level shifting.  
-> The JSN-SR04T waterproof variant is available in a 3.3V version, which connects directly with no voltage divider needed.
+> This 1kΩ / 2kΩ divider reduces 5V → ~3.3V.
+> The TRIG output from the ESP32-S3 at 3.3V is sufficient to trigger the JSN-SR04T
+> and does **not** require level shifting.
 
-> **Sensor Mounting — Calming Well Design:**  
-> This project uses a **calming well** constructed from a section of 3" PVC pipe to eliminate false echoes caused by pit wall reflections, pump hardware, and water surface turbulence.
->
-> - **Bottom cap** — drilled with inflow holes to allow pit water to freely enter and equalize with the pit level while dampening surface agitation
-> - **Top cap** — transducer mounted centrally in the end cap, facing downward, firing directly down the bore of the pipe toward the water surface
->
-> The calming well provides a clean, stable column of water with a flat reflective surface, resulting in consistent and accurate distance readings. The enclosed tube also shields the transducer face from splash, condensation drip, and side-wall reflections that commonly cause erratic readings when sensors are mounted openly above the pit.
+---
+
+## Calming Well Design
+
+This project uses a **calming well** constructed from a section of 3" PVC pipe to eliminate false echoes from pit walls, pump hardware, and water surface turbulence:
+
+* **Bottom cap** — drilled with inflow holes allowing pit water to freely equalize while dampening surface agitation
+* **Top cap** — transducer mounted centrally, facing downward, firing directly down the bore toward the water surface
+
+The calming well provides a clean, stable column of water with a flat reflective surface for consistent, accurate readings. The enclosed tube also shields the transducer from splash, condensation drip, and side-wall reflections.
 
 ---
 
 ## How It Works
 
-1. On boot, the ESP32 connects to your WiFi network and starts the web server.
-2. The ultrasonic sensor fires a 40 kHz pulse at a configured interval and measures the echo return time.
-3. Distance to the water surface is calculated using the speed of sound and converted to a water level reading.
-4. If the measured water level reaches or exceeds `ALARM_LEVEL_CM`, an alert email (and SMS via email-to-text gateway) is sent.
-5. Alerts are rate-limited to prevent inbox flooding during sustained high-water events.
-6. Current readings are accessible via the built-in web interface on the local network.
-
----
-
-## Web Interface
-
-On boot, the ESP32 displays its **IP address and MAC address** on the Serial Monitor — no need to check your router's DHCP table. Once connected to WiFi, the web interface is accessible at:
-
-```
-http://<ESP32_IP_ADDRESS>/
-```
-
-The interface displays the current water level reading and system status.
+1. On boot, the ESP32-S3 connects to WiFi and starts the AsyncWebServer
+2. The JSN-SR04T fires a 40kHz pulse at configured intervals and measures echo return time
+3. Distance to the water surface is calculated and compared against thresholds
+4. Events are written to **InfluxDB** on the Raspberry Pi for historical tracking
+5. Grafana panels on the Pi are **iframed** into the ESP32-S3 `/graph` web page
+6. If water reaches **HIGHWATER** threshold — SinricPro triggers Alexa HIGHWATER routine
+7. If water reaches **FLOODING** threshold — SinricPro triggers Alexa FLOODING routine; Alexa announces the alert and plays three Claxion alarm blasts via My Media
+8. Simultaneously, SMS and email alerts are dispatched
+9. All events and readings are logged to **LittleFS** `.txt` files
+10. Logs are browsable via `/SdBrowse` and viewable via the built-in File Reader
+11. LittleFS logs are automatically purged every **Sunday at midnight**
 
 ---
 
 ## Remote Access
 
-The built-in web interface is available on your local network by default. For **secure remote access from anywhere** — without opening ports or relying on dynamic DNS — [Tailscale](https://tailscale.com) combined with [Caddy](https://caddyserver.com) provides an elegant, zero-trust solution.
-
-This Hackster.io guide by AB9NQ walks through the full setup for securely exposing ESP32 web dashboards over Tailscale with Caddy as an HTTPS reverse proxy:
+For secure remote access from anywhere without opening firewall ports, [Tailscale](https://tailscale.com) combined with [Caddy](https://caddyserver.com) provides an elegant zero-trust solution hosted on the Raspberry Pi.
 
 > 📖 [**Secure Weather Dashboards via Tailscale and Caddy**](https://www.hackster.io/AB9NQ/secure-weather-dashboards-via-tailscale-and-caddy-94c424)
-
-The same approach applies directly to the Sump-Monitor web interface — since this project runs continuously, a **Raspberry Pi is the ideal host** for Tailscale and Caddy. It draws minimal power, runs 24/7 without issue, and sits quietly on your local network proxying requests to the ESP32. This gives you encrypted, authenticated access to your sump level readings from any device on your Tailscale network, around the clock.
 
 ---
 
 ## Related Projects
 
-- [ESP-Now-with-Remote-Relay](https://github.com/Tech500/ESP-Now-with-Remote-Relay) — Extends this project with ESP-Now wireless relay switching for an auxiliary sump pump, Thingspeak graphing, FTP, OTA updates, and data logging at 15-minute intervals.
+* [ESP-Now-with-Remote-Relay](https://github.com/Tech500/ESP-Now-with-Remote-Relay) — Extends this project with ESP-Now wireless relay switching for an auxiliary sump pump, Thingspeak graphing, FTP, OTA updates, and data logging
 
 ---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [MIT License](https://github.com/Tech500/Sump-Monitor/blob/main/LICENSE).
+
+---
+
+## Credits
+
+* **William Lucid (Tech500), AB9NQ** — Project author, hardware design, firmware development
+* **Claude (Anthropic)** — AI development partner; firmware guidance, system architecture, and documentation
 
 ---
 
 ## Author
 
-**William Lucid (Tech500), AB9NQ**  
+**William Lucid (Tech500), AB9NQ**
 [GitHub Profile](https://github.com/Tech500)
 
 ---
 
-> ⚠️ **Disclaimer:** This project is a passive monitoring aid. It is **not** a replacement for a properly maintained sump pump system, a battery backup pump, or professional flood protection. Always maintain your sump pump hardware and consider a secondary backup pump on a dedicated breaker.
+> ⚠️ **Disclaimer:** This project is a passive monitoring aid. It is **not** a replacement
+> for a properly maintained sump pump system, a battery backup pump, or professional
+> flood protection. Always maintain your sump pump hardware and consider a secondary
+> backup pump on a dedicated breaker.
