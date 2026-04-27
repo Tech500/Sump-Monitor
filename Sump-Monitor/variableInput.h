@@ -55,12 +55,6 @@ int PORT = 80;  //Web Server port
 unsigned long int myChannelNumber = 123456; //placeholder --enter your myChannelNumber
 const char * myWriteAPIKey = "EE2345";
 
-//Server settings --all internal LAN addresses  --Enter your network address reaervation from router ip, gateway, dns
-#define ip {192,168,12,22}
-#define subnet {255,255,255,0}
-#define gateway {192,168,12,1}
-#define dns {192,168,12,1}
-
 //webInterface --send Data to Domain, hosted web site
 const char * sendData = "your domaindestination and filename for data from webInterface function";
 
