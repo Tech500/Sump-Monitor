@@ -11,6 +11,17 @@ const char * host  = "Sump-Monitor";
 const char * ssid = "yourSSID";
 const char * password = "yourPassword";
 
+//Project uses static ip addressing with router ip address reservation
+#define STATIC_IP      "192.168.12.22"  
+#define STATIC_GW      "192.168.12.1"
+#define STATIC_SUBNET  "255.255.255.0"
+#define STATIC_DNS     "192.168.12.1"
+
+// Pit depth thresholds -- measure your pit before setting these
+#define FLOODING_THRESHOLD   0.5    // inches -- sensor near submerged
+#define HIGHWATER_THRESHOLD  3.0    // inches -- pump should be running
+#define DRY_THRESHOLD       38.0    // inches -- pit dry, pump off
+
 //Settings pertain to NTP
 const int udpPort = 1337;
 //NTP Time Servers
