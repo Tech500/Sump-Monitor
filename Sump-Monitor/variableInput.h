@@ -22,6 +22,13 @@ const char * password = "yourPassword";
 #define HIGHWATER_THRESHOLD  3.0    // inches -- pump should be running
 #define DRY_THRESHOLD       38.0    // inches -- pit dry, pump off
 
+// ===================================================
+// Sensor Mode -- set before uploading
+//   true  = live JSN-SR04T ultrasonic sensor
+//   false = random() simulator (demo / bench testing)
+// ===================================================
+#define ULTRASONIC_MODE false
+
 //Settings pertain to NTP
 const int udpPort = 1337;
 //NTP Time Servers
