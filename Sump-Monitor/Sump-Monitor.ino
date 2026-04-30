@@ -1,8 +1,8 @@
 /////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////
 //
-// Version 9.0.1  04/27/2026
-// 
+// Version 9.0.1  04/30/2026
+//
 // Fixed sync issue; no longer changes on /sump page refreshes.
 // Using processor1 in read-only processing.
 //
@@ -133,11 +133,15 @@ bool sinricReady = false;
 
 void setupSinricPro() {
   SinricProContactsensor &myHighWater = SinricPro[HIGHWATER];
-  SinricProContactsensor &myFlooding  = SinricPro[FLOODING];
-  SinricProContactsensor &myAllClear  = SinricPro[ALLCLEAR];
+  SinricProContactsensor &myFlooding = SinricPro[FLOODING];
+  SinricProContactsensor &myAllClear = SinricPro[ALLCLEAR];
 
-  SinricPro.onConnected([]()    { Serial.printf("Connected to SinricPro\r\n"); });
-  SinricPro.onDisconnected([]() { Serial.printf("Disconnected from SinricPro\r\n"); });
+  SinricPro.onConnected([]() {
+    Serial.printf("Connected to SinricPro\r\n");
+  });
+  SinricPro.onDisconnected([]() {
+    Serial.printf("Disconnected from SinricPro\r\n");
+  });
 
   SinricPro.begin(APP_KEY, APP_SECRET);
 }
@@ -249,17 +253,17 @@ int noSSIDcount = 0;
 // ===================================================
 // Alert globals -- no latching, live state only
 // ===================================================
-bool didFire5 = false;   // 5-minute cycle flag
+bool didFire5 = false;  // 5-minute cycle flag
 
 bool alertFlag = false;  // true when HIGHWATER
 bool floodFlag = false;  // true when FLOODING
-int  alertCount = 0;
+int alertCount = 0;
 
 unsigned long lastAlertTime = 0;
 
-String condition        = "";
-String prevCondition    = "";
-String lastCondition    = "";
+String condition = "";
+String prevCondition = "";
+String lastCondition = "";
 String currentCondition = "";
 
 // Phase intervals kept for email throttling
@@ -271,31 +275,27 @@ const unsigned long PHASE2_INTERVAL = 600000UL;
 // ===================================================
 bool pumpRunning = false;
 unsigned long pumpStartMillis = 0;
-unsigned long lastRunSeconds  = 0;
+unsigned long lastRunSeconds = 0;
 unsigned long totalRunSeconds = 0;
 unsigned long dailyPumpSeconds = 0;
 unsigned long dailyPumpMinutes = 0;
-unsigned long dailyPumpHours   = 0;
+unsigned long dailyPumpHours = 0;
 
 // ===================================================
 // Sinric Pro globals
 // ===================================================
-bool myPowerState    = true;
+bool myPowerState = true;
 bool lastSinricState = false;
 #define pass 2
 
-void sendToGrafana(const char* eventType) {
+void sendToGrafana(const char *eventType) {
   if (WiFi.status() != WL_CONNECTED) return;
 
   HTTPClient http;
   http.begin("http://lucidpi.local:8001/event");
   http.addHeader("Content-Type", "application/json");
 
-  String body = "{\"type\":\"" + String(eventType) +
-                "\",\"location\":\"sump_pit\"" +
-                ",\"distance\":" + String(distanceToTarget, 1) +
-                ",\"pitActivity\":" + String(pitActivity, 1) +
-                ",\"dtStamp\":\"" + dtStamp + "\"}";
+  String body = "{\"type\":\"" + String(eventType) + "\",\"location\":\"sump_pit\"" + ",\"distance\":" + String(distanceToTarget, 1) + ",\"pitActivity\":" + String(pitActivity, 1) + ",\"dtStamp\":\"" + dtStamp + "\"}";
 
   int responseCode = http.POST(body);
   Serial.printf("[Grafana] %s distance: %.1f pitActivity: %.1f response: %d\n",
@@ -410,7 +410,7 @@ void setup(void) {
   started = 1;
 
   getDateTime();
-  updateFiveMinuteCycle();
+  //updateFiveMinuteCycle();
   delay(500);
 
   ElegantOTA.begin(&serverAsync);
@@ -512,7 +512,7 @@ void loop() {
     ESP.restart();
   }
 
-  for(int x= 1; x<5000;x++){  
+  for (int x = 1; x < 5000; x++) {
     ftpSrv.handleFTP();
   }
 
@@ -528,7 +528,7 @@ void loop() {
 
   if (MINUTE % 5 != 0) {
     didFire5 = false;
-  }  
+  }
 
   if ((HOUR == 23) && (MINUTE == 57) && (SECOND == 0)) {
     newDay();
@@ -543,7 +543,7 @@ void updateFiveMinuteCycle() {
 
   lastUpdate = dtStamp;
 
-  readSensor();          // ONLY here
+  readSensor();  // ONLY here
   updateCondition();
   updatePumpRuntime();
   distanceLog();
@@ -551,11 +551,11 @@ void updateFiveMinuteCycle() {
   //handleAlexaReporting();
 
   // Snapshot for UI
-  snapshotDistance   = distanceToTarget;
-  snapshotCondition  = condition;
-  snapshotAlertFlag  = alertFlag;
-  snapshotFloodFlag  = floodFlag;
-  snapshotTime       = dtStamp;
+  snapshotDistance = distanceToTarget;
+  snapshotCondition = condition;
+  snapshotAlertFlag = alertFlag;
+  snapshotFloodFlag = floodFlag;
+  snapshotTime = dtStamp;
 }
 
 // ===================================================
@@ -569,44 +569,44 @@ String processor1(const String &var) {
     return String(dist);
   }
 
-  if (var == F("DATE"))       return snapshotTime;
+  if (var == F("DATE")) return snapshotTime;
   if (var == F("LASTUPDATE")) return snapshotTime;
-  if (var == F("CLIENTIP"))   return ipREMOTE.toString();
+  if (var == F("CLIENTIP")) return ipREMOTE.toString();
 
   // ── Color for "Alert Status" label ──
   if (var == F("ALERTCOLOR")) {
-    if (snapshotFloodFlag)              return "#b91c1c";
-    if (snapshotAlertFlag)              return "#FFD700";
+    if (snapshotFloodFlag) return "#b91c1c";
+    if (snapshotAlertFlag) return "#FFD700";
     if (snapshotCondition == "PUMPOFF") return "#8b949e";
     return "#3fb950";
   }
 
   // ── Inline background color for key block ──
   if (var == F("ALERTBG")) {
-    if (snapshotFloodFlag)              return "#b91c1c";
-    if (snapshotAlertFlag)              return "#FFD700";
+    if (snapshotFloodFlag) return "#b91c1c";
+    if (snapshotAlertFlag) return "#FFD700";
     if (snapshotCondition == "PUMPOFF") return "#8b949e";
     return "#3fb950";
   }
 
   // ── Inline text color for key block ──
   if (var == F("ALERTFG")) {
-    if (snapshotAlertFlag)  return "#1a1a1a";   // dark text on yellow
-    return "#ffffff";                           // white text on all others
+    if (snapshotAlertFlag) return "#1a1a1a";  // dark text on yellow
+    return "#ffffff";                         // white text on all others
   }
 
   // ── CSS class for the key block ──
   if (var == F("ALERTKEYCLASS")) {
-    if (snapshotFloodFlag)              return "key-flood";
-    if (snapshotAlertFlag)              return "key-high";
+    if (snapshotFloodFlag) return "key-flood";
+    if (snapshotAlertFlag) return "key-high";
     if (snapshotCondition == "PUMPOFF") return "key-pumpoff";
     return "key-normal";
   }
 
   // ── Single word inside the key block ──
   if (var == F("ALERTKEYWORD")) {
-    if (snapshotFloodFlag)              return "FLOODING";
-    if (snapshotAlertFlag)              return "HIGH WATER";
+    if (snapshotFloodFlag) return "FLOODING";
+    if (snapshotAlertFlag) return "HIGH WATER";
     if (snapshotCondition == "PUMPOFF") return "PUMP OFF";
     return "NORMAL";
   }
@@ -633,8 +633,7 @@ String processor2(const String &var) {
   File file = root.openNextFile();
   while (file) {
     String file_name = file.name();
-    if (file_name.startsWith("DISTANCE") || file_name.startsWith("LOG") ||
-        file_name.startsWith("ALERT")    || file_name.startsWith("PUMP")) {
+    if (file_name.startsWith("DISTANCE") || file_name.startsWith("LOG") || file_name.startsWith("ALERT") || file_name.startsWith("PUMP")) {
       lastFileName = file_name;
       str += "<a href=\"/";
       str += file_name;
@@ -648,8 +647,8 @@ String processor2(const String &var) {
   }
   root.close();
 
-  if (var == F("URLLINK"))  return str;
-  if (var == F("LINK"))     return linkAddress;
+  if (var == F("URLLINK")) return str;
+  if (var == F("LINK")) return linkAddress;
   if (var == F("FILENAME")) return lastFileName;
 
   return String();
@@ -661,7 +660,7 @@ String processor3(const String &var) {
 }
 
 String processor4(const String &var) {
-  if (var == F("FN"))   return fn;
+  if (var == F("FN")) return fn;
   if (var == F("LINK")) return linkAddress;
   return String();
 }
@@ -698,20 +697,20 @@ void accessLog() {
 }
 
 void deleteAllFiles() {
-    File root = LittleFS.open("/");
-    File file = root.openNextFile();
+  File root = LittleFS.open("/");
+  File file = root.openNextFile();
 
-    while (file) {
-        String name = file.name();
+  while (file) {
+    String name = file.name();
 
-        // Skip the SYSTEM folder entirely
-        if (!name.startsWith("/SYSTEM")) {
-            LittleFS.remove(name);
-            Serial.println("Deleted: " + name);
-        }
-
-        file = root.openNextFile();
+    // Skip the SYSTEM folder entirely
+    if (!name.startsWith("/SYSTEM")) {
+      LittleFS.remove(name);
+      Serial.println("Deleted: " + name);
     }
+
+    file = root.openNextFile();
+  }
 }
 
 void end() {
@@ -726,7 +725,10 @@ void end() {
 
 void fileStore() {
   File log = LittleFS.open("/LOG.TXT", "a");
-  if (!log) { Serial.println("file open failed"); return; }
+  if (!log) {
+    Serial.println("file open failed");
+    return;
+  }
   String logname = "/LOG";
   logname += MONTH;
   logname += DATE;
@@ -741,11 +743,11 @@ String getDateTime() {
   tzset();
   tnow = time(nullptr) + 1;
   ti = localtime(&tnow);
-  DOW    = ti->tm_wday;
-  YEAR   = ti->tm_year + 1900;
-  MONTH  = ti->tm_mon + 1;
-  DATE   = ti->tm_mday;
-  HOUR   = ti->tm_hour;
+  DOW = ti->tm_wday;
+  YEAR = ti->tm_year + 1900;
+  MONTH = ti->tm_mon + 1;
+  DATE = ti->tm_mday;
+  HOUR = ti->tm_hour;
   MINUTE = ti->tm_min;
   SECOND = ti->tm_sec;
   strftime(strftime_buf, sizeof(strftime_buf), "%a , %m/%d/%Y , %H:%M:%S %Z", localtime(&tnow));
@@ -777,13 +779,16 @@ void distanceLog() {
   String Date, Month;
 
   tempy = DATE;
-  Date  = (tempy < 10) ? ("0" + String(tempy)) : String(tempy);
+  Date = (tempy < 10) ? ("0" + String(tempy)) : String(tempy);
   tempy = MONTH;
   Month = (tempy < 10) ? ("0" + String(tempy)) : String(tempy);
 
   String logname = "/DISTANCE" + Month + Date + ".TXT";
   File log = LittleFS.open(logname.c_str(), "a");
-  if (!log) { Serial.println(logname + " open failed"); return; }
+  if (!log) {
+    Serial.println(logname + " open failed");
+    return;
+  }
   delay(500);
   log.print(distanceToTarget);
   log.print(", inches,  ");
@@ -798,13 +803,16 @@ void logtoSD() {
   String Date, Month;
 
   tempy = DATE;
-  Date  = (tempy < 10) ? ("0" + String(tempy)) : String(tempy);
+  Date = (tempy < 10) ? ("0" + String(tempy)) : String(tempy);
   tempy = MONTH;
   Month = (tempy < 10) ? ("0" + String(tempy)) : String(tempy);
 
   String logname = "/LOG" + Month + Date + ".TXT";
   File log = LittleFS.open(logname.c_str(), "a");
-  if (!log) { Serial.println("file 'LOG.TXT' open failed"); return; }
+  if (!log) {
+    Serial.println("file 'LOG.TXT' open failed");
+    return;
+  }
   delay(500);
   log.print(condition);
   log.print(" ,  ");
@@ -813,13 +821,12 @@ void logtoSD() {
   log.println(dtStamp);
   log.close();
 
-  Serial.println("\n" + condition + ",  " + String(distanceToTarget, 1) +
-                 "  inches,  Data written to " + logname + ",  " + dtStamp + "\n\n");
+  Serial.println("\n" + condition + ",  " + String(distanceToTarget, 1) + "  inches,  Data written to " + logname + ",  " + dtStamp + "\n\n");
 }
 
 void pumpLog() {
-  unsigned long runMin = lastRunSeconds  / 60;
-  unsigned long runSec = lastRunSeconds  % 60;
+  unsigned long runMin = lastRunSeconds / 60;
+  unsigned long runSec = lastRunSeconds % 60;
   unsigned long totMin = totalRunSeconds / 60;
   unsigned long totSec = totalRunSeconds % 60;
 
@@ -840,9 +847,7 @@ void pumpLog() {
   log.println(dtStamp);
   log.close();
 
-  Serial.println("[Pump] Run: " + String(runMin) + "m " + String(runSec) +
-                 "s  Total today: " + String(totMin) + "m " + String(totSec) +
-                 "s  --  " + dtStamp);
+  Serial.println("[Pump] Run: " + String(runMin) + "m " + String(runSec) + "s  Total today: " + String(totMin) + "m " + String(totSec) + "s  --  " + dtStamp);
 }
 
 void masterAlexa(String condition) {
@@ -855,8 +860,8 @@ void masterAlexa(String condition) {
   if (condition == "PUMPOFF") return;
 
   SinricProContactsensor &myHighWater = SinricPro[HIGHWATER];
-  SinricProContactsensor &myFlooding  = SinricPro[FLOODING];
-  SinricProContactsensor &myAllClear  = SinricPro[ALLCLEAR];
+  SinricProContactsensor &myFlooding = SinricPro[FLOODING];
+  SinricProContactsensor &myAllClear = SinricPro[ALLCLEAR];
 
   if (condition == "FLOODING") {
     myHighWater.sendContactEvent(false);
@@ -894,26 +899,26 @@ void newDay() {
   Serial.println("Heartbeat: " + String(resp.status));
 
   // Reset alert and pump state at start of new day
-  alertFlag       = false;
-  floodFlag       = false;
-  alertCount      = 0;
+  alertFlag = false;
+  floodFlag = false;
+  alertCount = 0;
   totalRunSeconds = 0;
-  lastRunSeconds  = 0;
+  lastRunSeconds = 0;
   pumpStartMillis = 0;
-  pumpRunning     = false;
+  pumpRunning = false;
 
   // Write yesterday's total runtime to MASTER.TXT
   writeMasterRuntime();
 
   // Weekly purge on Saturday
   if (DOW == 6) {
-      deleteAllFiles();   // MASTER.TXT is safe
+    deleteAllFiles();  // MASTER.TXT is safe
   }
 
   // Reset daily counters
   dailyPumpSeconds = 0;
   dailyPumpMinutes = 0;
-  dailyPumpHours   = 0;
+  dailyPumpHours = 0;
 
   snapshotTime = dtStamp;
 }
@@ -936,8 +941,8 @@ String notFound(AsyncWebServerRequest *request) {
     request->send(404);
   } else {
     int fnsstart = request->url().lastIndexOf('/');
-    fn      = request->url().substring(fnsstart);
-    uncfn   = fn.substring(1);
+    fn = request->url().substring(fnsstart);
+    uncfn = fn.substring(1);
     urlPath = linkAddress + "/" + uncfn;
   }
 
@@ -960,10 +965,14 @@ void sendFlood() {
 
   File alertLog = LittleFS.open("/ALERT.TXT", "a");
   if (alertLog) {
-    alertLog.print("FLOODING Alert #"); alertLog.print(alertCount);
-    alertLog.print(" -- Distance: ");   alertLog.print(distanceToTarget, 1);
-    alertLog.print(" inches -- ");      alertLog.print(dtStamp);
-    alertLog.print(" -- Email: ");      alertLog.println(resp.status);
+    alertLog.print("FLOODING Alert #");
+    alertLog.print(alertCount);
+    alertLog.print(" -- Distance: ");
+    alertLog.print(distanceToTarget, 1);
+    alertLog.print(" inches -- ");
+    alertLog.print(dtStamp);
+    alertLog.print(" -- Email: ");
+    alertLog.println(resp.status);
     alertLog.close();
   }
 }
@@ -980,10 +989,14 @@ void sendAlert() {
 
   File alertLog = LittleFS.open("/ALERT.TXT", "a");
   if (alertLog) {
-    alertLog.print("Alert #");                    alertLog.print(alertCount);
-    alertLog.print(" -- High Water! Distance: "); alertLog.print(distanceToTarget, 1);
-    alertLog.print(" inches -- ");                alertLog.print(dtStamp);
-    alertLog.print(" -- Email: ");                alertLog.println(resp.status);
+    alertLog.print("Alert #");
+    alertLog.print(alertCount);
+    alertLog.print(" -- High Water! Distance: ");
+    alertLog.print(distanceToTarget, 1);
+    alertLog.print(" inches -- ");
+    alertLog.print(dtStamp);
+    alertLog.print(" -- Email: ");
+    alertLog.println(resp.status);
     alertLog.close();
   }
 }
@@ -999,10 +1012,14 @@ void sendAllClear() {
 
   File alertLog = LittleFS.open("/ALERT.TXT", "a");
   if (alertLog) {
-    alertLog.print("All Clear -- Water Normal. Distance: "); alertLog.print(distanceToTarget, 1);
-    alertLog.print(" inches -- ");        alertLog.print(dtStamp);
-    alertLog.print(" -- Total alerts: "); alertLog.print(alertCount);
-    alertLog.print(" -- Email: ");        alertLog.println(resp.status);
+    alertLog.print("All Clear -- Water Normal. Distance: ");
+    alertLog.print(distanceToTarget, 1);
+    alertLog.print(" inches -- ");
+    alertLog.print(dtStamp);
+    alertLog.print(" -- Total alerts: ");
+    alertLog.print(alertCount);
+    alertLog.print(" -- Email: ");
+    alertLog.println(resp.status);
     alertLog.close();
   }
 }
@@ -1011,7 +1028,7 @@ void sendAllClear() {
 // readSensor -- distance only, every loop pass
 // Swap random() for real sensor code when deployed
 // ===================================================
-pp// ===================================================
+// ===================================================
 // readSensor() -- JSN-SR04T ultrasonic, inches
 //                 OR random() simulator (demo mode)
 // Mode controlled by ULTRASONIC_MODE in variableInput.h
@@ -1019,54 +1036,52 @@ pp// ===================================================
 // ===================================================
 void readSensor() {
 
-#if ULTRASONIC_MODE
+  if (ULTRASONIC_MODE)
+  {
+    // ── Live sensor mode ──────────────────────────
+    const int  SAMPLES = 5;
+    const long TIMEOUT = 30000UL;   // ~510 cm max range, µS
+    float total        = 0.0;
+    int   validReadings = 0;
 
-  // ── Live sensor mode ──────────────────────────
-  const int  SAMPLES  = 5;
-  const long TIMEOUT  = 30000UL;   // ~510cm max range, uS
-  float total         = 0.0;
-  int   validReadings = 0;
+    for (int i = 0; i < SAMPLES; i++) {
 
-  for (int i = 0; i < SAMPLES; i++) {
+      digitalWrite(trigPin, LOW);
+      delayMicroseconds(2);
 
-    digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
+      // JSN-SR04T requires a 20 µS trigger pulse
+      digitalWrite(trigPin, HIGH);
+      delayMicroseconds(20);
+      digitalWrite(trigPin, LOW);
 
-    // JSN-SR04T requires 20uS trigger pulse
-    digitalWrite(trigPin, HIGH);
-    delayMicroseconds(20);
-    digitalWrite(trigPin, LOW);
+      long duration = pulseIn(echoPin, HIGH, TIMEOUT);
 
-    long duration = pulseIn(echoPin, HIGH, TIMEOUT);
+      if (duration > 0) {
+        float inches = (duration / 73.746) / 2.0;
+        total += inches;
+        validReadings++;
+      }
 
-    if (duration > 0) {
-      float inches = (duration / 73.746) / 2.0;
-      total += inches;
-      validReadings++;
+      delay(dt);   // dt = 50, defined in sketch
     }
 
-    delay(dt);   // dt = 50, defined in sketch
+    if (validReadings > 0) {
+      distanceToTarget = total / validReadings;
+      Serial.printf("[Sensor] LIVE  %.1f inches  (%d/%d valid)\n",   // ← moved here
+                    distanceToTarget, validReadings, SAMPLES);
+    } else {
+      distanceToTarget = nosensor;   // 0.00 — fail loud = FLOODING
+      Serial.println("[Sensor] WARNING -- no valid echo returns");
+    }
   }
-
-  if (validReadings > 0) {
-    distanceToTarget = total / validReadings;
-  } else {
-    distanceToTarget = nosensor;   // 0.00 -- fail loud = FLOODING
-    Serial.println("[Sensor] WARNING -- no valid echo returns");
+  else   // ULTRASONIC_MODE == false — no need to test it explicitly
+  {
+    // ── Demo / simulator mode ─────────────────────
+    // random() range covers full pit depth 0.0 – 50.0 inches
+    distanceToTarget = random(0, 501) / 10.0;
+    Serial.printf("[Sensor] DEMO  %.1f inches  (simulated)\n",
+                  distanceToTarget);
   }
-
-  Serial.printf("[Sensor] LIVE  %.1f inches  (%d/%d valid)\n",
-                distanceToTarget, validReadings, SAMPLES);
-
-#else
-
-  // ── Demo / simulator mode ─────────────────────
-  // random() range covers full pit depth 0.0 - 50.0 inches
-  distanceToTarget = random(0, 501) / 10.0;
-  Serial.printf("[Sensor] DEMO  %.1f inches  (simulated)\n",
-                distanceToTarget);
-
-#endif
 
   pitActivity = distanceToTarget;
 }
@@ -1120,11 +1135,9 @@ String updateCondition() {
 void updatePumpRuntime() {
 
   // Pump starts when leaving PUMPOFF
-  if (condition != "PUMPOFF" &&
-      prevCondition == "PUMPOFF" &&
-      !pumpRunning) {
+  if (condition != "PUMPOFF" && prevCondition == "PUMPOFF" && !pumpRunning) {
 
-    pumpRunning     = true;
+    pumpRunning = true;
     pumpStartMillis = millis();
     Serial.println("[Pump] Start detected: " + dtStamp);
   }
@@ -1132,30 +1145,29 @@ void updatePumpRuntime() {
   // Pump stops when returning to PUMPOFF
   if (condition == "PUMPOFF" && pumpRunning) {
 
-    pumpRunning      = false;
-    lastRunSeconds   = (millis() - pumpStartMillis) / 1000;
+    pumpRunning = false;
+    lastRunSeconds = (millis() - pumpStartMillis) / 1000;
     totalRunSeconds += lastRunSeconds;
-    pumpStartMillis  = 0;
+    pumpStartMillis = 0;
 
     pumpLog();
   }
 }
 
 void writeMasterRuntime() {
-    File f = LittleFS.open("/MASTER.TXT", "a");
-    if (!f) return;
+  File f = LittleFS.open("/MASTER.TXT", "a");
+  if (!f) return;
 
-    char line[80];
-    sprintf(line,
-        "Total runtime: %02dh %02dm %02ds  --  %s\n",
-        dailyPumpHours,
-        dailyPumpMinutes,
-        dailyPumpSeconds,
-        dtStamp.c_str()
-    );
+  char line[80];
+  sprintf(line,
+          "Total runtime: %02dh %02dm %02ds  --  %s\n",
+          dailyPumpHours,
+          dailyPumpMinutes,
+          dailyPumpSeconds,
+          dtStamp.c_str());
 
-    f.print(line);
-    f.close();
+  f.print(line);
+  f.close();
 }
 
 void Wifi_Start() {
