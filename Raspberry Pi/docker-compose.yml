@@ -1,0 +1,59 @@
+version: '3.8'
+services:
+  influxdb:
+    image: influxdb:1.8
+    container_name: sump_influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+    environment:
+      - INFLUXDB_DB=sumpmonitor
+      - INFLUXDB_USER=sump
+      - INFLUXDB_USER_PASSWORD=changeme123
+      - INFLUXDB_ADMIN_ENABLED=true
+  fastapi:
+    image: python:3.11-slim
+    container_name: sump_receiver
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./app:/app
+    working_dir: /app
+    command: >
+      bash -c "pip install fastapi uvicorn influxdb pytz --quiet
+      && uvicorn main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      - influxdb
+  grafana:
+    image: grafana/grafana:latest
+    container_name: sump_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=changeme123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+    depends_on:
+      - influxdb
+  mymedia:
+    image: stayallive/my-media-for-alexa
+    container_name: sump_mymedia
+    restart: unless-stopped
+    ports:
+      - "52051:52051"
+    volumes:
+      - ./mymedia:/config
+
+volumes:
+  influxdb-data:
+  grafana-data:
