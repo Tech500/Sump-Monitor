@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   influxdb:
     image: influxdb:1.8
@@ -13,6 +12,7 @@ services:
       - INFLUXDB_USER=sump
       - INFLUXDB_USER_PASSWORD=changeme123
       - INFLUXDB_ADMIN_ENABLED=true
+
   fastapi:
     image: python:3.11-slim
     container_name: sump_receiver
@@ -27,6 +27,7 @@ services:
       && uvicorn main:app --host 0.0.0.0 --port 8000"
     depends_on:
       - influxdb
+
   grafana:
     image: grafana/grafana:latest
     container_name: sump_grafana
@@ -45,14 +46,6 @@ services:
       - GF_SECURITY_ALLOW_EMBEDDING=true
     depends_on:
       - influxdb
-  mymedia:
-    image: stayallive/my-media-for-alexa
-    container_name: sump_mymedia
-    restart: unless-stopped
-    ports:
-      - "52051:52051"
-    volumes:
-      - ./mymedia:/config
 
 volumes:
   influxdb-data:
