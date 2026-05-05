@@ -29,7 +29,7 @@ services:
       - influxdb
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.5.3
     container_name: sump_grafana
     restart: unless-stopped
     ports:
@@ -39,14 +39,28 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=changeme123
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_SERVER_ROOT_URL=http://localhost:3000/
-      - GF_SERVER_SERVE_FROM_SUB_PATH=false
+      - GF_SERVER_ROOT_URL=http://192.168.12.122/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_FEATURE_TOGGLES_ENABLE=kubernetesDashboards=false
     depends_on:
       - influxdb
+
+  caddy:
+    image: caddy:latest
+    container_name: sump_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+    depends_on:
+      - grafana
 
 volumes:
   influxdb-data:
   grafana-data:
+  caddy-data:
