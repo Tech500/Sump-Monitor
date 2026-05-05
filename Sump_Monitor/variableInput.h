@@ -5,7 +5,7 @@
 // 
 
 // Replace with your network details  
-const char * host  = "Sump-Monitor-1";
+const char * host  = "Sump-Monitor";
 
 //Project uses static ip addressing with router ip address reservation
 #define STATIC_IP      "192.168.12.22"  
@@ -32,7 +32,7 @@ const char * NTP0 = "us.pool.ntp.org";
 const char * NTP1 = "time.nist.gov";
 
 // ── Server Configuration ──────────────────────────
-#define SERVER_IP   "192.168.12.122"
+#define SERVER_IP   "192.168.12.122"  //Raspberry Pi ipAddress
 #define SERVER_PORT  8001
 
 //Find your public ipAddress:  https://whatismyipaddress.com/
@@ -41,22 +41,22 @@ String LISTEN_PORT = "80"; //Part of href link for "GET" requests
 
 String linkAddress = "192.168.12.22";
 
-String ip1String = "192.168.12.22";  //Host ip address  
+String ip1String = "192.168.12.22";  //Host --ESP32 ip address  
 
 int PORT = 80;  //Web Server port
 
 // ===================================================
 // Email sender credentials
 // ===================================================
-#define SENDER_EMAIL   "ab9nq.william@gmail.com"       // sending Gmail account  <---- use a seperate Gmail account; not your main Gmail account set filter!
-#define SENDER_PASS    "pgns djue qzps seat"            // Gmail app password
+#define SENDER_EMAIL   "your Gmail account"       // sending Gmail account  <---- use a seperate Gmail account; not your main Gmail account set filter!
+#define SENDER_PASS    "your Google Mail app password"            // Gmail app password
 
 // ===================================================
 // Alert destinations
 // ===================================================
-#define ALERT_EMAIL    "ab9nq.william@gmail.com"         // Larry's dedicated sump Gmail
-#define ALERT_SMS      "3173405675@tmomail.net"        // Larry's T-Mobile SMS gateway
-#define ALERT_EMAIL2   "ab9nq.william@gmail.com"       // your monitoring copy
+#define ALERT_EMAIL    ""         // Larry's dedicated sump Gmail
+#define ALERT_SMS      "your sms gateway"        // Larry's T-Mobile SMS gateway
+#define ALERT_EMAIL2   "other contact Gmail"       // your monitoring copy
 
 #define ALERT_TAG  "SUMP"
 
@@ -65,25 +65,19 @@ int PORT = 80;  //Web Server port
 // ===================================================
 // Enter the local IP address of your Grafana server (Raspberry Pi)
 // Example: "192.168.1.100" -- check your router for the Pi's assigned IP
-const char * grafanaIP = "192.168.12.122";  
+const char * grafanaIP = serverIP;  
 const int grafanaPort = 3000;
 // Your Grafana dashboard UID -- found in the dashboard URL:
 // http://grafanaIP:3000/d/XXXXXXX/dashboard-name
-const char * grafanaDashboardUID = "adqlkqm";
+const char * grafanaDashboardUID = "xxxxxx";
 // ===================================================
-
-//Graphing requires "FREE" "ThingSpeak.com" account..  
-//Enter "ThingSpeak.com" data here....
-//Example data; enter yout account data..
-unsigned long int myChannelNumber = 123456; 
-const char * myWriteAPIKey = "EE2345";
 
 //webInterface --send Data to Domain, hosted web site
 const char * sendData = "your domaindestination and filename for data from webInterface function";
 
 //FTP Credentials
-const char * ftpUser = "sump";
-const char * ftpPassword = "sumpone";
+const char * ftpUser = "create user";
+const char * ftpPassword = "create password";
  
 //Restricted Access
 const char* Restricted = "/Restricted";  //Can be any filename.  
@@ -95,8 +89,8 @@ const char* Restricted = "/Restricted";  //Can be any filename.
 
 ///////////////// OTA Support //////////////////////////
 
-const char* http_username = "admin";
-const char* http_password = "admin";
+const char* http_username = "create username";
+const char* http_password = "create password";
 
 // xx.xx.xx.xx:yyyy/login will log in; this will allow updating firmware using:
 // xx.xx.xx.xx:yyyy/update
@@ -108,10 +102,10 @@ const char* http_password = "admin";
 // ===================================================
 // Sinric Pro credentials
 // ===================================================
-#define APP_KEY    "f965bf3e-6d28-41e4-93f3-06772a503550"
-#define APP_SECRET "12de50c7-24cf-47e1-a0ca-63e22e6090f4-fc49eeb2-fc36-4fd5-bd36-7aed7bb000ad"
+#define APP_KEY    "Sinricpro portal"
+#define APP_SECRET "Sinricpro portal"
 
 
-#define HIGHWATER  "69e010efad44f4047dff36d3"
-#define ALLCLEAR   "69e0ea0bad44f4047dffbae4"  
-#define FLOODING   "69e011aec1c259380d9824c7"  
+#define HIGHWATER  "Sinricpro portal"
+#define ALLCLEAR   "Sinricpro portal"  
+#define FLOODING   "Sinricpro portal"  
