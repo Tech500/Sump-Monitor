@@ -54,9 +54,9 @@ int PORT = 80;  //Web Server port
 // ===================================================
 // Alert destinations
 // ===================================================
-#define ALERT_EMAIL    ""         // Larry's dedicated sump Gmail
+#define ALERT_EMAIL    "your Gmail account"         // Larry's dedicated sump Gmail
 #define ALERT_SMS      "your sms gateway"        // Larry's T-Mobile SMS gateway
-#define ALERT_EMAIL2   "other contact Gmail"       // your monitoring copy
+#define ALERT_EMAIL2   "other Gmail contact"       // your monitoring copy
 
 #define ALERT_TAG  "SUMP"
 
