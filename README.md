@@ -577,3 +577,10 @@ docker exec -it sump_influxdb influx -execute \
 | [`Raspberry Pi/GRAFANA_SETUP.md`](Raspberry%20Pi/GRAFANA_SETUP.md) | Grafana dashboard configuration |
 | [`Raspberry Pi/TAILSCALE_SETUP.md`](Raspberry%20Pi/TAILSCALE_SETUP.md) | Tailscale remote access setup |
 | [`Alexa/Alexa --Routines.pdf`](Alexa/Alexa%20--Routines.pdf) | Alexa routine reference |
+
+---
+
+## Acknowledgments
+
+Project Development Assistant and README documentation for Version 10 developed with assistance from
+[Claude](https://claude.ai) by Anthropic.
