@@ -79,17 +79,13 @@
 //
 // NTP time routines optimized for speed by schufti --of ESP8266.com
 //
-// Project uses ESP8266 Development board: NodeMCU
-//
-// readFiles and readFile functions by martinayotte of ESP8266 Community Forum
-//
 // Previous projects: by tech500 on https://github.com/tech500
 //
 // Project is Open-Source; requires ESP32-S# with ESP-1-N16R8 development board.
 //
-// ESP-32-S3 Development Board ESP-32-S3 Module with ESP-1-N16R8   Memory size required!!!
+// Development Board ESP-32-S3 Module with ESP-1-N16R8   Memory size required!!!
 //
-// Note: Uses ESP32-S3 by Espressif Community version 3.3.7 for "Arduino IDE Nightbuild 2.3.8."
+// Note: Uses ESP32-S3 by Espressif Community version 3.3.7 for "Arduino IDE 2.3.7"
 //
 /////////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////
