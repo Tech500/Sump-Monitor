@@ -2,6 +2,8 @@
 ### Raspberry Pi 5 + ESP32-S3 Sump Pit Monitoring System
 **Version 10**
 
+Tech500/Sump-Monitor is a sump monitoring project with demo and live modes controlled in variableInput.h. Demo mode runs without the ultrasonic sensor, while live mode uses the waterproof JSN-SR04T ultrasonic sensor wired directly to the development board with Vcc, Ground, Trigger, and Echo connections. The flooding, high-water, and all-clear thresholds are also configurable in variableInput.h, which keeps setup straightforward and avoids digging through the codebase for values. The README already covers the supported hardware and configuration clearly, including the ESP32-ESP-1-N16R8 requirement and the 3.3 V sensor wiring.
+
 ---
 
 ## Project Structure
