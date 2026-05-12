@@ -85,7 +85,7 @@
 //
 // Previous projects: by tech500 on https://github.com/tech500
 //
-// Project is Open-Source; requires ESP8266 based development board.
+// Project is Open-Source; requires ESP32-S# with ESP-1-N16R8 development board.
 //
 // ESP-32-S3 Development Board ESP-32-S3 Module with ESP-1-N16R8   Memory size required!!!
 //
