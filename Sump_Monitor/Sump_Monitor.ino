@@ -1143,7 +1143,7 @@ String updateCondition() {
   // FLOODING (≤ 0.5")
   else {
     condition = "FLOODING";
-    alertFlag = false;  //was true wml
+    alertFlag = true;  
     floodFlag = true;
   }
 
