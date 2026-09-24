@@ -8,7 +8,7 @@
 const char * host  = "Sump-Monitor";
 
 //Project uses static ip addressing with router ip address reservation
-#define STATIC_IP      "192.168.12.22"  
+#define STATIC_IP      "192.168.12.122"  
 #define STATIC_GW      "192.168.12.1"
 #define STATIC_SUBNET  "255.255.255.0"
 #define STATIC_DNS     "192.168.12.1"
