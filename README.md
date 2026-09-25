@@ -53,7 +53,7 @@ Settings include:
 - Pit threshold values (flooding distance, high water distance)
 - Alert email / SMS settings
 
-> **Note:** All values requiring your personal configuration are marked with `#########` placeholders.
+> **Note:** All values requiring your personal configuration are marked with `xxxxxxxxx` placeholders.
 
 ---
 
